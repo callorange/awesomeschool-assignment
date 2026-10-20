@@ -9,7 +9,7 @@
 - Python 3.14, Django 6.1.2, DRF, Psycopg 3, PostgreSQL 18.6을 사용하는 단일 Django 프로젝트의 초기 실행 환경을 구성한다.
 - uv의 비패키지 방식으로 `pyproject.toml`과 `uv.lock`을 관리하고, Ruff와 Django 기본 테스트 도구로 검증 방식을 통일한다. Django 프로젝트 자체의 배포 패키지는 빌드·설치하지 않는다.
 - `src/config/`에 Django 설정과 진입점, `src/education/`에 향후 교육·신청 기능을 담을 앱 골격을 배치한다. 화면은 Django Templates, CSS, JavaScript `fetch`를 사용하는 방향으로 기록한다.
-- 로컬 PostgreSQL 실행용 Compose와 `.env.example`을 제공하고, 환경 변수로 Django와 DB 설정을 주입한다.
+- 로컬 PostgreSQL 실행용 Compose와 `.env.example`을 제공하고, django-environ으로 저장소 루트 `.env`를 읽어 Django와 DB를 설정한다. 기존 환경 변수를 우선하며 uv의 `--env-file`과 중복 로딩하지 않는다.
 - README와 `docs/architecture.md`에 실행·검증 절차, 구조, 기술 선택 이유, 현재 구현 범위 및 후속 작업을 기록한다.
 - `AGENTS.md`의 Project Rules와 `openspec/config.yaml`에 프로젝트 고유의 개발 규약과 OpenSpec 지침을 반영한다. 템플릿 managed 영역과 설치 파일은 변경하지 않는다.
 - 별도 관리자 목록 화면, Google Spreadsheet 내보내기, AWS 계획·배포 구성, AI 도구 활용 기록은 MVP 이후 구현 예정 사항으로 계속 관리한다.
@@ -29,6 +29,6 @@
 
 - 추가 대상: `pyproject.toml`, `uv.lock`, `.python-version`, `.env.example`, `compose.yaml`, `src/`, `README.md`, `docs/architecture.md`.
 - 수정 대상: `openspec/config.yaml`, `AGENTS.md`의 Project Rules. 과제 원문, 기존 ignore 설정 및 도구 설치 파일은 유지한다.
-- 런타임 직접 의존성: Django, `djangorestframework`, `psycopg[binary]`. 개발 직접 의존성: Ruff. 테스트는 Django와 DRF 내장 도구를 사용한다.
+- 런타임 직접 의존성: Django, `djangorestframework`, `psycopg[binary]`, `django-environ`. 개발 직접 의존성: Ruff. 테스트는 Django와 DRF 내장 도구를 사용한다.
 - 기존 서비스 코드·공개 API·업무 DB가 없으므로 기존 계약이나 데이터의 변환은 없다. Django 내장 앱의 초기 migration은 새 로컬 개발 DB에만 적용한다.
 - 완료 증거는 lockfile 기반 설치, Django system check, PostgreSQL 연결·기본 migration, 초기 smoke test, Ruff 검사 및 문서와 명령의 일치 여부다. 운영 배포와 실제 외부 서비스 연동은 수행하지 않는다.

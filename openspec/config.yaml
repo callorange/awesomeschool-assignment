@@ -5,24 +5,28 @@ context: |
   All artifacts must be written in Korean.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  프로젝트는 교육 소개, 신청 접수, 신청 관리를 제공하는 어썸스쿨 개발 과제다.
+  Python 3.14, Django 6.1.2, DRF, Psycopg 3, PostgreSQL 18.6을 사용한다.
+  uv 비패키지 방식과 lockfile로 환경을 관리하고 Ruff와 Django test runner로 검증한다.
+  Django 기본 골격은 startproject와 startapp으로 생성한다.
+  django-environ으로 저장소 루트 .env를 자동 로딩하고 기존 환경 변수를 우선한다.
+  uv --env-file로 중복 로딩하지 않으며 필수값의 누락과 빈 값은 설정 오류로 처리한다.
+  구조와 개발 규약은 docs/architecture.md, 실행 방법과 구현 상태는 README.md를 따른다.
+  과제 원문은 docs/awesomeschool-assignment.md에 있다.
+  MVP는 소개 화면, 반응형 신청 폼과 비동기 제출, admin CRUD·상태 관리, GET/POST API다.
+  별도 관리자 목록, Spreadsheet 내보내기, AWS 구성, AI 활용 기록은 MVP 이후 예정 사항이다.
+  자동 안내 메일의 MVP 포함 여부는 별도로 결정한다.
+  GitHub Flow를 사용하며 main에서 feature/<change-name> 브랜치를 생성한다.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+rules:
+  proposal:
+    - 현재 change 범위와 제외 범위, MVP 이후 예정 사항을 구분한다.
+  design:
+    - 변경에 관련된 데이터·개인정보·권한 경계와 기술 선택 이유를 설명한다.
+  tasks:
+    - 각 작업에 관찰 가능한 검증 방법을 포함하고 필요한 테스트·문서를 해당 작업과 함께 처리한다.
+
+operations:
+  apply:
+    guidance:
+      - 관련 검사의 실제 결과를 확인한 뒤 완료 표시하고, 환경 문제와 코드 오류 및 미검증 범위를 구분한다.

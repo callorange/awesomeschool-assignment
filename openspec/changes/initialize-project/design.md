@@ -34,6 +34,7 @@ Python 3.14와 Django 6.1.2를 사용한다. `.python-version`은 `3.14`, `pypro
 | 런타임 | `Django` | ORM, template, admin, 기본 인증과 테스트 기반 |
 | 런타임 | `djangorestframework` | 후속 신청 API와 API 테스트 도구 |
 | 런타임 | `psycopg[binary]` | 로컬 PostgreSQL 연결, 별도 드라이버 컴파일 회피 |
+| 런타임 | `django-environ` | 저장소 루트 `.env` 로딩과 환경 변수 boolean·목록 해석 |
 | 개발 | `ruff` | Python lint와 format 검사 |
 | 환경 관리 | uv | 의존성 설치 및 lockfile 관리 |
 | 테스트 | Django TestCase / DRF APITestCase | 별도 테스트 패키지 없이 초기 및 후속 검증 |
@@ -83,7 +84,7 @@ uv run django-admin startapp education src/education
 - `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
 
-Compose와 호스트에서 실행하는 Django가 같은 DB 이름·사용자·포트를 사용한다. Django의 host 기본값은 로컬 연결을 기준으로 한다. uv의 `--env-file .env`로 환경을 로드하므로 dotenv·환경 URL 파서 패키지를 추가하지 않는다. `DJANGO_DEBUG`는 문자열을 명시적으로 해석하고 기본값은 false로 둔다. secret key와 DB 비밀번호 등 필수 환경 변수가 없으면 실제 값을 출력하지 않는 설정 오류로 종료한다. 언어는 한국어, 시간대는 `Asia/Seoul`, timezone-aware datetime을 사용한다.
+Compose와 호스트에서 실행하는 Django가 같은 DB 이름·사용자·포트를 사용한다. Django의 host 기본값은 로컬 연결을 기준으로 한다. Django 설정은 django-environ으로 저장소 루트의 `.env`를 자동 로딩하며, 이미 주입된 환경 변수를 우선한다. `.env`가 없어도 필요한 환경 변수를 직접 주입하면 실행할 수 있다. uv의 `--env-file`은 중복 사용하지 않는다. `DJANGO_DEBUG`는 django-environ의 boolean 해석을 사용하고 기본값은 false로 둔다. secret key와 DB 이름·사용자·비밀번호는 없거나 비어 있으면 실제 값을 출력하지 않는 설정 오류로 종료한다. 기존 `POSTGRES_*` 계약을 유지하며 `DATABASE_URL`로 변경하지 않는다. 언어는 한국어, 시간대는 `Asia/Seoul`, timezone-aware datetime을 사용한다.
 
 `.env.example`에는 로컬 개발용 `DJANGO_DEBUG=true`, `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`, `POSTGRES_HOST=127.0.0.1` 예시를 제공한다. 허용 host는 쉼표로 분리해 Django 설정의 목록으로 변환한다. DEBUG의 예시값은 로컬 개발용이며 환경 변수 누락 시의 false 기본값은 유지한다. README에는 예제 복사 후 개발용 secret key와 DB 비밀번호를 준비하는 절차를 포함한다.
 
@@ -106,17 +107,17 @@ README에 다음 명령과 실행 순서를 제공한다. `.env` 준비와 Docke
 uv sync --locked
 docker compose config --quiet
 docker compose up -d --wait db
-uv run --env-file .env python src/manage.py check
-uv run --env-file .env python src/manage.py migrate --noinput
-uv run --env-file .env python src/manage.py makemigrations --check --dry-run
-uv run --env-file .env python src/manage.py test education
+uv run python src/manage.py check
+uv run python src/manage.py migrate --noinput
+uv run python src/manage.py makemigrations --check --dry-run
+uv run python src/manage.py test education
 uv run ruff check .
 uv run ruff format --check .
 ```
 
 Ruff의 `target-version`은 `py314`로 설정하며 template managed 파일, 도구 설치 파일과 생성 캐시를 검사·자동 수정하지 않도록 검사 범위를 프로젝트 소유 Python 코드로 제한한다.
 
-초기 테스트는 설정과 DB의 연결을 실제 PostgreSQL 경로로 검증하는 작은 smoke test로 구성한다. 기본 DB 연결의 vendor가 PostgreSQL인지와 간단한 쿼리 결과를 확인하고, `/admin/login/`에 접근했을 때 로그인 화면이 정상 응답하는지 확인한다. 설정에서 별도 파싱 로직을 작성하면 DEBUG의 false/true 해석과 필수 환경 변수 누락 동작을 좁은 테스트로 검증한다. 이 단계에 존재하지 않는 업무 동작의 가상 테스트나 외부 서비스 연결 테스트는 만들지 않는다.
+초기 테스트는 설정과 DB의 연결을 실제 PostgreSQL 경로로 검증하는 작은 smoke test로 구성한다. 기본 DB 연결의 vendor가 PostgreSQL인지와 간단한 쿼리 결과를 확인하고, `/admin/login/`에 접근했을 때 로그인 화면이 정상 응답하는지 확인한다. 실제 `.env`와 격리된 임시 디렉터리에 설정 파일을 복사하여 루트 `.env` 로딩, 기존 환경 변수의 우선순위, DEBUG boolean과 허용 host 목록 해석, 필수 환경 변수 누락·빈 값의 오류를 검증한다. 빈 환경 변수도 `.env` 값으로 덮어쓰지 않는다. 이 단계에 존재하지 않는 업무 동작의 가상 테스트나 외부 서비스 연결 테스트는 만들지 않는다.
 
 `migrate` 및 테스트를 통과하면 PostgreSQL 연결과 내장 인증·admin 테이블 초기화를 확인할 수 있다. 명령 실행 실패는 코드 오류와 Docker·DB·권한 등 환경 문제를 구분해 기록하며, 검증하지 못한 항목을 완료로 표시하지 않는다.
 

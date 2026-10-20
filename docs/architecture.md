@@ -1,4 +1,4 @@
-# 아키텍처와 개발 규약
+# 아키텍처와 기술 선택
 
 교육 소개 → 신청 접수 → 신청 관리라는 하나의 흐름을 단일 Django 프로젝트에서 구현합니다. 초기 구성에서는 개발 환경과 앱 골격만 제공하며, 실제 교육·신청 기능은 후속 change에서 추가합니다. 실행 명령과 구현 예정 목록은 [README](../README.md), 원래 요구사항은 [과제 문서](awesomeschool-assignment.md)를 기준으로 합니다.
 
@@ -36,7 +36,7 @@ uv는 `[tool.uv] package = false`인 비패키지 방식으로 사용합니다. 
 
 런타임 직접 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`이고 개발 직접 의존성은 Ruff입니다. 추가 패키지는 해당 기능에 필요할 때 도입합니다. 환경 설치는 `uv sync --locked`, 실행은 `uv run`을 사용하며 `uv.lock`을 함께 관리합니다.
 
-Django 기본 파일은 다음 명령으로 생성했습니다. 새 checkout에서 다시 실행하거나 기존 생성 파일을 덮어쓰는 명령이 아닙니다.
+새 Django 프로젝트와 앱의 기본 골격은 LLM이 직접 작성하지 않고 Django의 `startproject`·`startapp` 명령으로 생성한 뒤 필요한 설정을 편집합니다. 기존 Django 기본 파일은 다음 명령으로 생성했습니다. 새 checkout에서 다시 실행하거나 기존 생성 파일을 덮어쓰는 명령이 아닙니다.
 
 ```powershell
 New-Item -ItemType Directory src
@@ -51,12 +51,4 @@ uv run django-admin startapp education src/education
 
 Compose는 개발용 DB만 실행하고 포트를 loopback에만 공개합니다. 로컬 계정은 테스트 DB 생성 권한이 있으며 운영에 재사용하지 않습니다. named volume과 실제 `.env`를 보호하고 정지 시 volume을 삭제하지 않습니다.
 
-## 검증과 변경 관리
-
-README의 명령으로 Django check, migration 변경 누락 검사, `test education`, Ruff lint·format 검사를 수행합니다. 테스트는 PostgreSQL의 별도 테스트 DB를 사용합니다. 실제 `.env`와 격리한 파일 로딩·환경 변수 우선순위·설정 오류·파싱, 실제 DB 쿼리, 관리자 로그인 화면을 확인하고, 정적 파일은 실제 개발 서버에서 별도로 확인합니다. 실패를 코드 오류와 환경 문제로 구분하며 미검증 항목을 성공으로 기록하지 않습니다.
-
-Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니다. 에이전트 스킬·template managed 파일과 도구 캐시는 검사·자동 수정하지 않습니다. 주석과 docstring은 프로젝트의 한국어 정책을 따르되 Django가 생성한 기존 설명은 유지합니다.
-
-GitHub Flow의 기준 브랜치는 `main`, 작업 브랜치는 `feature/<change-name>`입니다. 계획과 구현은 같은 브랜치에서 별도 커밋으로 관리하고 검증 후 PR로 검토·병합합니다. Conventional Commits의 영어 type과 한국어 제목을 사용합니다.
-
-`AGENTS.md`는 로컬 실행 지침이며 현재 Git에서 제외되어 있습니다. 다른 checkout에 전달할 규약은 이 문서와 README에도 기록합니다. `openspec/config.yaml`에는 OpenSpec에 필요한 맥락과 artifact별 지침만 간결하게 유지합니다. 별도 constitution이나 custom schema는 만들지 않습니다.
+개발·검증·Git 정책은 [개발 규약](development.md)을 따릅니다. 전체 문서의 역할은 [문서 안내](README.md)를 참고하세요.

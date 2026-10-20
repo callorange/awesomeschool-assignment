@@ -109,9 +109,7 @@ MVP 이후에도 다음 예정 사항을 유지합니다.
 
 ## 개발 흐름
 
-GitHub Flow를 따릅니다. `main`에서 `feature/<change-name>` 브랜치를 만들고, 같은 브랜치에서 계획과 구현을 별도 커밋으로 기록합니다. 관련 검증 후 PR을 검토·병합하고 작업 브랜치를 정리합니다. 커밋은 Conventional Commits의 영어 type과 한국어 제목을 사용합니다.
-
-폴더 구조와 기술 선택 이유는 [아키텍처와 개발 규약](docs/architecture.md)을 참고하세요. 과제 원문은 [교육 신청 시스템 구현 과제](docs/awesomeschool-assignment.md), 초기 구성의 완료 기록은 [initialize-project](openspec/changes/archive/2026-10-20-initialize-project/proposal.md)에 있습니다.
+브랜치·커밋·병합 정책은 [개발 규약](docs/development.md)을 따릅니다. 주제별 거버넌스는 [문서 안내](docs/README.md), 폴더 구조와 기술 선택 이유는 [아키텍처](docs/architecture.md)를 참고하세요. 과제 원문은 [교육 신청 시스템 구현 과제](docs/awesomeschool-assignment.md), 초기 구성의 완료 기록은 [initialize-project](openspec/changes/archive/2026-10-20-initialize-project/proposal.md)에 있습니다.
 
 ## AI 코딩 보조 도구 활용
 

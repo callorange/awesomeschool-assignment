@@ -6,17 +6,9 @@ context: |
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
   프로젝트는 교육 소개, 신청 접수, 신청 관리를 제공하는 어썸스쿨 개발 과제다.
-  Python 3.14, Django 6.1.2, DRF, Psycopg 3, PostgreSQL 18.6을 사용한다.
-  uv 비패키지 방식과 lockfile로 환경을 관리하고 Ruff와 Django test runner로 검증한다.
-  Django 기본 골격은 startproject와 startapp으로 생성한다.
-  django-environ으로 저장소 루트 .env를 자동 로딩하고 기존 환경 변수를 우선한다.
-  uv --env-file로 중복 로딩하지 않으며 필수값의 누락과 빈 값은 설정 오류로 처리한다.
-  구조와 개발 규약은 docs/architecture.md, 실행 방법과 구현 상태는 README.md를 따른다.
-  과제 원문은 docs/awesomeschool-assignment.md에 있다.
-  MVP는 소개 화면, 반응형 신청 폼과 비동기 제출, admin CRUD·상태 관리, GET/POST API다.
-  별도 관리자 목록, Spreadsheet 내보내기, AWS 구성, AI 활용 기록은 MVP 이후 예정 사항이다.
-  자동 안내 메일의 MVP 포함 여부는 별도로 결정한다.
-  GitHub Flow를 사용하며 main에서 feature/<change-name> 브랜치를 생성한다.
+  공유 거버넌스의 진입점은 docs/README.md다. 작업에 관련된 주제별 규약을 읽고 적용한다.
+  구조·기술 선택은 docs/architecture.md, 개발·검증·Git 정책은 docs/development.md를 따른다.
+  실행 방법·현재 구현 상태·MVP와 후속 범위는 README.md, 과제 원문은 docs/awesomeschool-assignment.md를 따른다.
 
 rules:
   proposal:

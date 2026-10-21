@@ -32,7 +32,7 @@
 
 ### 2. 화면 구조와 반응형
 
-`education/urls.py`를 프로젝트 URL에 연결한다. 공통 base, 랜딩, 상세 template를 `templates/education/`에 두고 공개 GET view로 렌더링한다. 없는 상세는 404, 빈 목록은 안내 문구로 처리한다.
+`education/urls.py`를 프로젝트 URL에 연결한다. 공통 base를 `src/templates/base.html`, 랜딩·상세를 `src/templates/education/`에 두고 공개 GET view로 렌더링한다. 없는 상세는 404, 빈 목록은 안내 문구로 처리한다.
 
 랜딩은 간결한 내비게이션, 교육 목적을 전달하는 히어로 영역, 프로그램 카드, 출처·과제 안내 footer로 구성한다. 상세는 제목·대표 이미지·소개, 교육목표·대상, 시수별 커리큘럼, 원문 출처 순서다. 범용 대시보드형 UI 대신 교육 내용을 읽고 비교할 수 있는 여백과 제목 위계를 사용한다.
 
@@ -42,13 +42,13 @@
 
 [공식 CLI 안내](https://tailwindcss.com/docs/installation/tailwind-cli)에 따라 Tailwind CSS 4 계열과 `@tailwindcss/cli`를 개발 전용 npm 의존성으로 사용하고 package-lock으로 설치 조합을 고정한다. Django Tailwind 연동 패키지나 Vite는 추가하지 않는다.
 
-루트 `package.json`에 `build:css`·`watch:css`를 제공한다. `frontend/styles.css`를 입력으로, `src/education/static/education/css/site.css`를 출력으로 사용한다. Django template 디렉터리를 명시적인 탐색 대상으로 지정하고 클래스 이름은 완전한 문자열로 작성한다. CSS 출력과 원본·lockfile은 함께 커밋하며 node_modules는 제외한다. `npm ci`와 `npm run build:css`는 CSS를 수정하는 개발자에게만 필요하다.
+루트 `package.json`에 `build:css`·`watch:css`를 제공한다. `frontend/styles.css`를 입력으로, `src/static/css/site.css`를 출력으로 사용한다. 통합 `src/templates/`를 명시적인 탐색 대상으로 지정하고 클래스 이름은 완전한 문자열로 작성한다. CSS 출력과 원본·lockfile은 함께 커밋하며 node_modules는 제외한다. `npm ci`와 `npm run build:css`는 CSS를 수정하는 개발자에게만 필요하다.
 
 template는 static 태그로 빌드 CSS를 참조하고 CDN이나 브라우저 내 Tailwind 컴파일을 사용하지 않는다. 기본 시스템 글꼴을 사용하여 외부 글꼴 요청도 피한다. Python 검사는 기존 Ruff 범위를 유지하고 template managed 파일을 CSS 탐색·검사 대상으로 확장하지 않는다.
 
 ### 4. 고정 프리셋과 안전한 초기화
 
-`src/education/data/education_presets.json`과 `src/education/data/images/`에 데이터와 이미지 원본 3개를 포함한다. 원본은 프리셋 입력이며 웹에서 직접 제공하는 static 자산이 아니다. 명령이 선택된 기본 Storage에 저장한다. 출처는 다음 공식 페이지이며 실제 수집 시점에 내용을 재확인한다.
+`presets/education/education_presets.json`과 `presets/education/images/`에 데이터와 이미지 원본 3개를 포함한다. 원본은 프리셋 입력이며 웹에서 직접 제공하는 static 자산이 아니다. 명령이 선택된 기본 Storage에 저장한다. 출처는 다음 공식 페이지이며 실제 수집 시점에 내용을 재확인한다.
 
 - 프롬프트 히어로: https://www.hero-school.net/visit/prompt/
 - 감정탐험 히어로: https://hero-school.net/visit/emotion/
@@ -66,7 +66,7 @@ template는 static 태그로 빌드 CSS를 참조하고 CDN이나 브라우저 �
 
 manage.py·ASGI·WSGI는 `os.environ.setdefault`의 기본 모듈을 `config.settings.dev`로 바꾸고 이미 지정된 `DJANGO_SETTINGS_MODULE`을 보존한다. 운영은 실행 프로세스에서 `DJANGO_SETTINGS_MODULE=config.settings.prod`를 명시한다. 관리 명령은 Django의 `--settings=config.settings.prod`도 지원한다. 선택은 settings import 전에 완료되어야 하므로 프로젝트 `.env`의 설정 모듈 값으로 자동 선택한다고 설명하지 않는다. 별도 MEDIA_STORAGE 모드나 자동 환경 추론은 추가하지 않는다.
 
-dev는 Django 기본 FileSystemStorage, 저장소 루트 `media/`와 `/media/`를 사용한다. DEBUG는 기존 DJANGO_DEBUG 파싱과 기본 false 계약을 유지하며 README의 로컬 예시에서 true를 설정한다. DEBUG일 때만 개발 URL에서 미디어를 제공한다. 생성된 media 디렉터리는 Git에서 제외하고 배포에 포함할 이미지 원본은 data/images에 보존한다. dev에서는 AWS 백엔드를 import·초기화하거나 credential·메타데이터를 조회하지 않는다.
+dev는 Django 기본 FileSystemStorage, 저장소 루트 `media/`와 `/media/`를 사용한다. DEBUG는 기존 DJANGO_DEBUG 파싱과 기본 false 계약을 유지하며 README의 로컬 예시에서 true를 설정한다. DEBUG일 때만 개발 URL에서 미디어를 제공한다. 생성된 media 디렉터리는 Git에서 제외하고 배포에 포함할 이미지 원본은 `presets/education/images/`에 보존한다. dev에서는 AWS 백엔드를 import·초기화하거나 credential·메타데이터를 조회하지 않는다.
 
 prod는 DEBUG=false를 강제하고 DJANGO_DEBUG=true 요청은 설정 오류로 거부한다. S3 버킷·리전·CloudFront 도메인과 명시적인 ALLOWED_HOSTS를 요구하고 누락 시 로컬 저장소로 fallback하지 않는다. `STORAGES['default']`의 BACKEND를 `storages.backends.s3.S3Storage`로 지정하고 OPTIONS로 bucket_name·region_name·custom_domain·location='media'·url_protocol='https:'·default_acl=None·file_overwrite=False·querystring_auth=False를 전달한다. 버킷은 비공개이고 CloudFront OAC를 통해 원본 접근을 허용하며 공개 교육 이미지의 viewer 접근은 서명 없이 제공하는 전제다. 이 설정은 [django-storages S3 문서](https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html)와 [AWS OAC 문서](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html)를 기준으로 한다.
 

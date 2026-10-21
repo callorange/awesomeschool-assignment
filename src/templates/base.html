@@ -1,0 +1,37 @@
+{% load static %}
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="경험으로 배우고 나만의 가능성을 발견하는 교육. 히어로스쿨의 세 가지 프로그램을 만나보세요.">
+    <title>{% block title %}배움이 모험이 되는 곳 | 히어로스쿨{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  </head>
+  <body class="bg-paper font-sans text-ink antialiased">
+    <a href="#main" class="sr-only z-50 bg-white p-4 focus:not-sr-only focus:absolute">본문 바로가기</a>
+    <header class="border-b border-ink/15">
+      <nav aria-label="주요 메뉴" class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4 md:px-8">
+        <a href="{% url 'education:landing' %}" class="flex min-h-11 items-center gap-2 font-black tracking-tight">
+          <span aria-hidden="true" class="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-lg text-paper">h.</span>
+          <span>히어로스쿨</span>
+        </a>
+        <a href="{% url 'education:landing' %}#programs" class="flex min-h-11 items-center gap-3 text-sm font-semibold">교육 둘러보기 <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+    <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
+    <footer class="mt-20 border-t border-ink/20 px-5 py-9 md:px-8">
+      <div class="mx-auto flex max-w-6xl flex-col justify-between gap-5 md:flex-row">
+        <div>
+          <p class="text-lg font-black">히어로스쿨</p>
+          <p class="mt-2 text-sm text-ink/75">경험으로 배우고, 나만의 가능성을 발견합니다.</p>
+        </div>
+        <div class="max-w-md text-sm leading-6 text-ink/75">
+          <p>어썸스쿨 개발 과제용 교육 소개 페이지입니다.</p>
+          <p>교육 정보와 이미지는 <a href="https://hero-school.net/" class="inline-flex min-h-11 items-center underline underline-offset-4">히어로스쿨 공식 사이트</a>를 참고했습니다.</p>
+          <p>실제 교육 신청과 문의는 원문 사이트에서 확인해 주세요.</p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

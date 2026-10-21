@@ -156,7 +156,7 @@ MVP 이후에도 다음 예정 사항을 유지합니다.
 
 ## 개발 흐름
 
-브랜치·커밋·병합 정책은 [개발 규약](docs/development.md)을 따릅니다. 주제별 거버넌스는 [문서 안내](docs/README.md), 폴더 구조와 기술 선택 이유는 [아키텍처](docs/architecture.md)를 참고하세요. 과제 원문은 [교육 신청 시스템 구현 과제](docs/awesomeschool-assignment.md), 초기 구성의 완료 기록은 [initialize-project](openspec/changes/archive/2026-10-20-initialize-project/proposal.md), 교육 화면의 설계·검증 기록은 [add-front-end](openspec/changes/add-front-end/tasks.md)에 있습니다. `add-front-end`는 구현 작업을 완료했으며 아직 archive하지 않았습니다.
+브랜치·커밋·병합 정책은 [개발 규약](docs/development.md)을 따릅니다. 주제별 거버넌스는 [문서 안내](docs/README.md), 폴더 구조와 기술 선택 이유는 [아키텍처](docs/architecture.md)를 참고하세요. 과제 원문은 [교육 신청 시스템 구현 과제](docs/awesomeschool-assignment.md), 초기 구성의 완료 기록은 [initialize-project](openspec/changes/archive/2026-10-20-initialize-project/proposal.md), 교육 화면의 설계·검증 기록은 [add-front-end](openspec/changes/archive/2026-10-21-add-front-end/tasks.md)에 있습니다. `add-front-end`는 구현과 메인 명세 동기화를 완료하고 2026-10-21에 archive했습니다.
 
 ## AI 코딩 보조 도구 활용
 

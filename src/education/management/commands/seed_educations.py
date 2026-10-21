@@ -10,58 +10,22 @@ from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from education.media import education_image_path
 from education.models import Education
 
 PRESET_PATH = settings.BASE_DIR.parent / "presets/education/education_presets.json"
 
 
-def _validate_curriculum(curriculum):
-    """시수별 교시가 누락 없이 순서대로 제공되는지 검사한다.
-
-    각 과정의 periods는 중복 없는 양의 정수여야 하며 lessons의 길이와 같아야 한다.
-    교시는 1부터 시작하는 연속된 period와 비어 있지 않은 주제·활동·설명을 가진다.
-
-    Raises:
-        ValueError: 목록·시수·교시 순서 또는 문자열 내용이 올바르지 않은 경우.
-        KeyError: 과정이나 교시의 필수 키가 없는 경우.
-        TypeError: 과정이나 교시가 키로 접근할 수 있는 구조가 아닌 경우.
-    """
-    if not isinstance(curriculum, list) or not curriculum:
-        raise ValueError("커리큘럼 목록이 필요합니다.")
-    periods = set()
-    for course in curriculum:
-        length = course["periods"]
-        lessons = course["lessons"]
-        if type(length) is not int or length < 1 or length in periods:
-            raise ValueError("시수 구성이 올바르지 않습니다.")
-        periods.add(length)
-        if not isinstance(lessons, list) or len(lessons) != length:
-            raise ValueError("시수와 교시 수가 다릅니다.")
-        for number, lesson in enumerate(lessons, 1):
-            if type(lesson["period"]) is not int or lesson["period"] != number:
-                raise ValueError("교시 순서가 올바르지 않습니다.")
-            _validate_texts(
-                [lesson[key] for key in ("topic", "activity", "description")]
-            )
-
-
-def _validate_texts(values):
-    """빈 목록·공백 문자열·문자열 이외의 항목은 ValueError로 거부한다."""
-    if not isinstance(values, list) or not values:
-        raise ValueError("비어 있지 않은 문자열 목록이 필요합니다.")
-    if any(not isinstance(value, str) or not value.strip() for value in values):
-        raise ValueError("비어 있지 않은 문자열이 필요합니다.")
-
-
 def _load_presets():
     """DB나 저장소에 쓰지 않고 전체 프리셋과 이미지 원본을 검증한다.
 
-    프리셋 images 폴더의 PNG만 허용하며 slug와 내용 해시로 저장소 상대 이름을 만든다.
-    날짜는 모델 검증을 통해 정규화하고 프리셋 안의 slug 중복도 거부한다.
+    프리셋 images 폴더의 PNG만 허용하며 고정 UUIDv7과 내용 해시로 키를 만든다.
+    UUID는 프리셋에 기록해 실패 후 재실행에서도 같은 파일을 재사용한다.
+    수집 기록은 프리셋에만 남기고 slug·UUID 중복도 거부한다.
 
     Returns:
         모델 필드 값 사전과 이미지 bytes를 짝지은 목록. image 값은 원본 경로가 아닌
-        저장소 상대 이름이며 collected_on은 검증된 날짜다.
+        저장소 상대 이름이며 수집 기록은 모델 필드 사전에 포함하지 않는다.
 
     Raises:
         OSError: 프리셋 또는 이미지 파일을 읽을 수 없는 경우.
@@ -75,8 +39,16 @@ def _load_presets():
         raise ValueError("교육 프리셋 목록이 필요합니다.")
     prepared = []
     slugs = set()
+    media_ids = set()
     for record in records:
         fields = dict(record)
+        for key in ("source_url", "source_image_url", "collected_on", "editorial_note"):
+            fields.pop(key, None)
+        media_id = Education._meta.get_field("media_id").to_python(fields["media_id"])
+        if media_id is None or media_id.version != 7 or media_id in media_ids:
+            raise ValueError("프리셋마다 고유한 UUIDv7 media_id가 필요합니다.")
+        media_ids.add(media_id)
+        fields["media_id"] = media_id
         image_path = (PRESET_PATH.parent / fields.pop("image")).resolve()
         if not image_path.is_relative_to((PRESET_PATH.parent / "images").resolve()):
             raise ValueError("이미지는 프리셋 images 안에 있어야 합니다.")
@@ -84,17 +56,13 @@ def _load_presets():
         if not content.startswith(b"\x89PNG\r\n\x1a\n"):
             raise ValueError("PNG 이미지 원본이 필요합니다.")
         digest = hashlib.sha256(content).hexdigest()
-        fields["image"] = f"education/presets/{fields['slug']}-{digest}.png"
+        fields["image"] = education_image_path(media_id, f"{digest}.png")
         education = Education(**fields)
         # 기존 교육은 재실행에서 보존하므로 DB slug 중복 검사는 생성 단계에 맡긴다.
         education.full_clean(validate_unique=False)
-        _validate_texts(education.goals)
-        _validate_texts(education.audiences)
-        _validate_curriculum(education.curriculum)
         if education.slug in slugs:
             raise ValueError("중복 교육 slug입니다.")
         slugs.add(education.slug)
-        fields["collected_on"] = education.collected_on
         prepared.append((fields, content))
     return prepared
 

@@ -51,7 +51,9 @@ class EducationPageTests(TestCase):
                 )
                 self.assertEqual(response.status_code, 200)
                 self.assertTemplateUsed(response, "education/detail.html")
-                self.assertContains(response, education.source_url)
+                self.assertNotContains(response, "교육 정보 출처")
+                self.assertNotContains(response, "수집일:")
+                self.assertNotContains(response, "히어로스쿨에서 원문 보기")
                 self.assertContains(response, education.image.url)
                 for text in education.goals + education.audiences:
                     self.assertContains(response, text)
@@ -71,6 +73,41 @@ class EducationPageTests(TestCase):
     def test_unknown_education_is_404_and_post_is_not_allowed(self):
         self.assertEqual(self.client.get("/educations/missing/").status_code, 404)
         self.assertEqual(self.client.post("/").status_code, 405)
+
+    def test_operation_information_is_escaped_and_has_no_application_link(self):
+        education = Education.objects.get(slug="prompt-hero")
+        note = "<script>공개 안내</script>\n준비사항을 확인하세요."
+        for operation_type, label in Education.OperationType.choices:
+            with self.subTest(operation_type=operation_type):
+                education.operation_type = operation_type
+                education.operation_note = note
+                education.save()
+                response = self.client.get(
+                    reverse("education:detail", args=[education.slug])
+                )
+                self.assertContains(response, label)
+                self.assertContains(response, "상담 접수 가능")
+                self.assertContains(
+                    response, "수강이나 교육 일정의 확정을 의미하지 않습니다"
+                )
+                self.assertContains(response, "&lt;script&gt;공개 안내&lt;/script&gt;")
+                self.assertNotContains(response, "<script>")
+                self.assertNotContains(response, "/apply/")
+                self.assertNotContains(response, "<form")
+
+    def test_inactive_education_remains_public_and_empty_note_is_omitted(self):
+        Education.objects.filter(slug="prompt-hero").update(
+            operation_note="", is_accepting_inquiries=False
+        )
+        landing = self.client.get(reverse("education:landing"))
+        detail_url = reverse("education:detail", args=["prompt-hero"])
+        self.assertContains(landing, detail_url)
+        response = self.client.get(detail_url)
+        self.assertContains(response, "상담 접수 중단")
+        self.assertNotContains(response, "상담 접수 가능")
+        self.assertNotContains(response, "whitespace-pre-line")
+        self.assertNotContains(response, "/apply/")
+        self.assertContains(response, 'id="curriculum"')
 
     def test_content_is_escaped(self):
         Education.objects.filter(slug="prompt-hero").update(
@@ -103,5 +140,13 @@ class EducationPageTests(TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(
-                    response, "https://cdn.example.com/media/education/presets/"
+                    response,
+                    "https://cdn.example.com/media/"
+                    + Education.objects.get(slug="prompt-hero").image.name,
                 )
+
+    def test_legacy_image_url_still_renders(self):
+        key = "education/presets/legacy.png"
+        Education.objects.filter(slug="prompt-hero").update(image=key)
+        for path in ("/", "/educations/prompt-hero/"):
+            self.assertContains(self.client.get(path), "/media/" + key)

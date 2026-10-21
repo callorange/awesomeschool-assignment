@@ -1,0 +1,244 @@
+[
+  {
+    "slug": "prompt-hero",
+    "title": "프롬프트 히어로",
+    "summary": "나만의 AI 멘토를 만들며 진로와 학습의 방향을 설계해요.",
+    "image": "images/prompt.png",
+    "image_alt": "프롬프트 히어로 교육을 상징하는 히어로 캐릭터",
+    "goals": [
+      "생성형 AI를 이해하고 챗봇을 제작하는 방법을 배웁니다.",
+      "AI 멘토와 대화하며 진로 목표와 실천 계획을 세웁니다.",
+      "상황에 맞는 질문과 지시를 설계하는 힘을 기릅니다."
+    ],
+    "audiences": [
+      "원하는 답을 얻는 AI 질문법이 궁금한 학생",
+      "나에게 맞는 AI 챗봇을 만들어보고 싶은 학생"
+    ],
+    "curriculum": [
+      {
+        "periods": 4,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "생성형 AI와 프롬프트",
+            "activity": "챗봇 서비스 체험 및 생성형 AI 기술 이해",
+            "description": "여러 챗봇을 비교하며 생성형 AI의 원리와 질문 설계를 알아봅니다."
+          },
+          {
+            "period": 2,
+            "topic": "AI 멘토 프롬프트 엔지니어링",
+            "activity": "나만의 챗봇 페르소나 기획",
+            "description": "진로 고민을 도와줄 AI 멘토의 역할과 대화 방식을 기획합니다."
+          },
+          {
+            "period": 3,
+            "topic": "AI 멘토 프롬프팅 실습",
+            "activity": "나만의 챗봇 제작",
+            "description": "프롬프트를 작성하고 응답을 점검하며 나만의 챗봇을 개선합니다."
+          },
+          {
+            "period": 4,
+            "topic": "AI 멘토와 맞춤형 생기부 컨설팅",
+            "activity": "멘토링을 통한 포트폴리오 설계",
+            "description": "대화를 바탕으로 목표와 활동을 연결한 포트폴리오를 설계합니다."
+          }
+        ]
+      },
+      {
+        "periods": 3,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "AI 멘토 프롬프트 엔지니어링",
+            "activity": "나만의 챗봇 페르소나 기획",
+            "description": "진로 고민을 도와줄 AI 멘토의 역할과 대화 방식을 기획합니다."
+          },
+          {
+            "period": 2,
+            "topic": "AI 멘토 프롬프팅 실습",
+            "activity": "나만의 챗봇 제작",
+            "description": "프롬프트를 작성하고 응답을 점검하며 나만의 챗봇을 개선합니다."
+          },
+          {
+            "period": 3,
+            "topic": "AI 멘토와 맞춤형 생기부 컨설팅",
+            "activity": "멘토링을 통한 포트폴리오 설계",
+            "description": "대화를 바탕으로 목표와 활동을 연결한 포트폴리오를 설계합니다."
+          }
+        ]
+      },
+      {
+        "periods": 2,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "AI 멘토 프롬프팅 실습",
+            "activity": "나만의 챗봇 제작",
+            "description": "프롬프트를 작성하고 응답을 점검하며 나만의 챗봇을 개선합니다."
+          },
+          {
+            "period": 2,
+            "topic": "AI 멘토와 맞춤형 생기부 컨설팅",
+            "activity": "멘토링을 통한 포트폴리오 설계",
+            "description": "대화를 바탕으로 목표와 활동을 연결한 포트폴리오를 설계합니다."
+          }
+        ]
+      }
+    ],
+    "source_url": "https://hero-school.net/visit/prompt/",
+    "source_image_url": "https://awesomeschool-portal.s3.amazonaws.com/portal/static/images/education/prompt/character.png",
+    "collected_on": "2026-10-21",
+    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다.",
+    "display_order": 1
+  },
+  {
+    "slug": "emotion-hero",
+    "title": "감정탐험 히어로",
+    "summary": "내 마음의 신호를 발견하고 친구의 마음을 이해해요.",
+    "image": "images/emotion.png",
+    "image_alt": "감정탐험 히어로 교육을 상징하는 히어로 캐릭터",
+    "goals": [
+      "몸과 마음의 변화를 알아차리고 감정을 조절합니다.",
+      "친구의 표정과 행동을 살피며 공감 대화를 연습합니다.",
+      "갈등에 대처하고 도움을 요청하며 건강한 관계를 만듭니다."
+    ],
+    "audiences": [
+      "감정을 말로 표현하고 조절하는 연습이 필요한 학생",
+      "친구의 마음을 이해하고 갈등을 풀고 싶은 학생"
+    ],
+    "curriculum": [
+      {
+        "periods": 4,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "감정 요정과 히어로 센서",
+            "activity": "내 마음과 몸의 신호 알기",
+            "description": "기분과 몸의 변화를 살피고 마음을 돌보는 방법을 찾아봅니다."
+          },
+          {
+            "period": 2,
+            "topic": "찌릿찌릿! 히어로 센서",
+            "activity": "신체 감각과 표현",
+            "description": "몸의 신호를 알아차리고 놀이로 감정을 표현합니다."
+          },
+          {
+            "period": 3,
+            "topic": "친구의 신호를 해독하라",
+            "activity": "타인 이해와 공감",
+            "description": "표정과 상황을 관찰하며 친구의 입장에서 대화합니다."
+          },
+          {
+            "period": 4,
+            "topic": "S.O.S 구조 신호 보내기",
+            "activity": "도움 요청과 공동체 활동",
+            "description": "도움 요청과 공감 대화를 연습하고 관계를 위한 약속을 정합니다."
+          }
+        ]
+      },
+      {
+        "periods": 3,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "감정 요정과 히어로 센서",
+            "activity": "내 마음과 몸의 신호 알기",
+            "description": "기분과 몸의 변화를 살피고 마음을 돌보는 방법을 찾아봅니다."
+          },
+          {
+            "period": 2,
+            "topic": "표정 탐정단과 표현 훈련",
+            "activity": "타인 이해와 공감",
+            "description": "말 이외의 표현을 관찰하고 서로의 감정을 이해합니다."
+          },
+          {
+            "period": 3,
+            "topic": "우리를 지키는 S.O.S",
+            "activity": "도움 요청과 공동체 활동",
+            "description": "어려움을 나누는 방법을 배우고 함께 지킬 약속을 만듭니다."
+          }
+        ]
+      }
+    ],
+    "source_url": "https://hero-school.net/visit/emotion/",
+    "source_image_url": "https://awesomeschool-portal.s3.amazonaws.com/portal/static/images/education/emotion/character.png",
+    "collected_on": "2026-10-21",
+    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다.",
+    "display_order": 2
+  },
+  {
+    "slug": "relationship-hero",
+    "title": "관계 히어로",
+    "summary": "마음의 문제를 함께 풀며 존중하는 관계를 만들어요.",
+    "image": "images/relationship.png",
+    "image_alt": "관계 히어로 교육을 상징하는 히어로 캐릭터",
+    "goals": [
+      "감정과 몸의 변화를 이해하고 스스로 조절합니다.",
+      "스트레스에 대처하며 다시 일어서는 힘을 기릅니다.",
+      "사실과 감정을 구분해 말하며 협력하는 관계를 만듭니다."
+    ],
+    "audiences": [
+      "감정을 이해하고 대화하는 연습이 필요한 학생",
+      "친구와 갈등을 해결하는 방법을 배우려는 학생"
+    ],
+    "curriculum": [
+      {
+        "periods": 4,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "멘탈 스캔과 회복",
+            "activity": "감정 상태 진단 및 자기 조절 훈련",
+            "description": "감정과 몸의 상태를 살피며 나에게 맞는 조절법을 연습합니다."
+          },
+          {
+            "period": 2,
+            "topic": "과부하 쿨다운",
+            "activity": "감정 조절 기술 훈련",
+            "description": "감정의 원인을 찾고 호흡 등 안정시키는 방법을 훈련합니다."
+          },
+          {
+            "period": 3,
+            "topic": "대화 코드 수정",
+            "activity": "갈등 해결 대화법 수정",
+            "description": "사실과 감정, 바라는 점을 구분해 상대를 존중하며 말합니다."
+          },
+          {
+            "period": 4,
+            "topic": "서버 안정화 프로젝트",
+            "activity": "학급 문제 해결 및 공동체 규칙 수립",
+            "description": "함께 지킬 규칙을 정하고 학교생활의 문제를 해결할 계획을 세웁니다."
+          }
+        ]
+      },
+      {
+        "periods": 3,
+        "lessons": [
+          {
+            "period": 1,
+            "topic": "멘탈 스캔과 회복",
+            "activity": "감정 상태 진단 및 자기 조절 훈련",
+            "description": "감정과 몸의 상태를 살피며 나에게 맞는 조절법을 연습합니다."
+          },
+          {
+            "period": 2,
+            "topic": "대화 코드 수정",
+            "activity": "갈등 해결을 위한 소통 대화법 실습",
+            "description": "사실과 감정, 바라는 점을 구분해 상대를 존중하며 말합니다."
+          },
+          {
+            "period": 3,
+            "topic": "서버 안정화 프로젝트",
+            "activity": "학급 문제 해결 및 공동체 규칙 수립",
+            "description": "함께 지킬 규칙을 정하고 학교생활의 문제를 해결할 계획을 세웁니다."
+          }
+        ]
+      }
+    ],
+    "source_url": "https://hero-school.net/visit/relationship/",
+    "source_image_url": "https://awesomeschool-portal.s3.amazonaws.com/portal/static/images/education/relationship/character.png",
+    "collected_on": "2026-10-21",
+    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다.",
+    "display_order": 3
+  }
+]

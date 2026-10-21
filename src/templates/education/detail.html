@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ education.title }} | 히어로스쿨{% endblock %}
+{% block content %}
+  <div class="mx-auto max-w-6xl px-5 pt-7 md:px-8">
+    <a href="{% url 'education:landing' %}#programs" class="inline-flex min-h-11 items-center gap-3 text-sm font-semibold"><span aria-hidden="true">←</span> 모든 교육 보기</a>
+    <section class="grid gap-9 py-9 md:py-14 lg:grid-cols-2 lg:items-center lg:gap-16" aria-labelledby="education-title">
+      <div>
+        <p class="mb-5 text-xs font-bold tracking-widest text-clay">HEROSCHOOL PROGRAM</p>
+        <h1 id="education-title" class="text-4xl leading-tight font-black tracking-tight md:text-5xl">{{ education.title }}</h1>
+        <p class="mt-6 max-w-lg text-lg leading-8 text-ink/80">{{ education.summary }}</p>
+        <div class="mt-7 flex flex-wrap gap-2">
+          <span class="rounded-full border border-ink/20 px-4 py-2 text-sm">직접 참여하는 체험 교육</span>
+          {% for course in education.curriculum %}<span class="rounded-full bg-leaf px-4 py-2 text-sm">{{ course.periods }}시수 과정</span>{% endfor %}
+        </div>
+        <a href="#curriculum" class="mt-8 inline-flex min-h-12 items-center gap-7 rounded-full bg-ink px-6 py-3 font-semibold text-white hover:bg-ink/90">커리큘럼 살펴보기 <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="flex h-80 items-center justify-center rounded-3xl bg-leaf p-8 md:h-96">
+        <img src="{{ education.image.url }}" alt="{{ education.image_alt }}" width="400" height="400" class="h-full w-full object-contain">
+      </div>
+    </section>
+    <div class="grid gap-10 border-t border-ink/20 py-12 lg:grid-cols-2 lg:gap-16">
+      <section aria-labelledby="goals-title">
+        <p class="mb-3 text-xs font-bold tracking-widest text-clay">LEARNING GOALS</p>
+        <h2 id="goals-title" class="text-2xl font-bold">이런 힘을 길러요</h2>
+        <ol class="mt-6 space-y-4">
+          {% for goal in education.goals %}
+            <li class="flex gap-4 leading-7"><span class="shrink-0 font-bold text-clay" aria-hidden="true">0{{ forloop.counter }}</span><span>{{ goal }}</span></li>
+          {% endfor %}
+        </ol>
+      </section>
+      <section aria-labelledby="audience-title" class="rounded-2xl bg-white p-7 md:p-8">
+        <p class="mb-3 text-xs font-bold tracking-widest text-clay">FOR YOU</p>
+        <h2 id="audience-title" class="text-2xl font-bold">이런 친구에게 추천해요</h2>
+        <ul class="mt-6 list-disc space-y-4 pl-5 leading-7 marker:text-clay">
+          {% for audience in education.audiences %}<li>{{ audience }}</li>{% endfor %}
+        </ul>
+      </section>
+    </div>
+    <section id="curriculum" class="scroll-mt-8 border-t border-ink/20 py-12" aria-labelledby="curriculum-title">
+      <p class="mb-3 text-xs font-bold tracking-widest text-clay">THE LEARNING JOURNEY</p>
+      <h2 id="curriculum-title" class="text-3xl font-black tracking-tight">배움은 이렇게 이어져요</h2>
+      <p class="mt-4 text-sm leading-7 text-ink/75">과정 길이에 따라 활동 구성이 달라집니다. 각 시수의 배움 여정을 확인하세요.</p>
+      {% for course in education.curriculum %}
+        <section class="mt-10" aria-labelledby="course-{{ course.periods }}">
+          <h3 id="course-{{ course.periods }}" class="mb-5 inline-block rounded-full bg-ink px-5 py-2 text-sm font-bold text-white">{{ course.periods }}시수 과정</h3>
+          <ol class="divide-y divide-ink/15 border-y border-ink/15">
+            {% for lesson in course.lessons %}
+              <li class="grid gap-3 py-6 md:grid-cols-[5rem_1fr] md:gap-5">
+                <p class="text-sm font-bold text-clay">{{ lesson.period }}교시</p>
+                <div class="min-w-0">
+                  <h4 class="text-lg font-bold">{{ lesson.topic }}</h4>
+                  <p class="mt-2 text-sm font-semibold text-ink/80">{{ lesson.activity }}</p>
+                  <p class="mt-2 max-w-3xl text-sm leading-7 text-ink/75">{{ lesson.description }}</p>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+        </section>
+      {% endfor %}
+    </section>
+    <aside class="rounded-2xl border border-ink/15 p-6 text-sm leading-7 text-ink/75" aria-label="교육 정보 출처">
+      <p>{{ education.editorial_note }}</p>
+      <p class="mt-2">수집일: {{ education.collected_on|date:"Y.m.d" }}</p>
+      <a href="{{ education.source_url }}" class="mt-2 inline-flex min-h-11 items-center gap-4 font-semibold text-ink underline underline-offset-4">히어로스쿨에서 원문 보기 <span aria-hidden="true">↗</span></a>
+    </aside>
+  </div>
+{% endblock %}

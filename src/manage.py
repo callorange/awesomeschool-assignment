@@ -6,13 +6,13 @@ import sys
 
 
 def main():
-    """Run Django management commands with config.settings as the default.
+    """Run Django management commands with config.settings.dev as the default.
 
-    An existing DJANGO_SETTINGS_MODULE takes precedence. config.settings loads
+    An existing DJANGO_SETTINGS_MODULE takes precedence. config.settings.dev loads
     the repository-root .env and gives process environment variables priority.
     Command-line arguments are passed unchanged to Django.
     """
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

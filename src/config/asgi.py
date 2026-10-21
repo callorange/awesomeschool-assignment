@@ -3,7 +3,7 @@ ASGI config for config project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
-Importing this module initializes Django. config.settings loads the
+Importing this module initializes Django. config.settings.dev loads the
 repository-root .env and gives process environment variables priority.
 
 For more information on this file, see
@@ -14,6 +14,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 
 application = get_asgi_application()

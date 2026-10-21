@@ -365,3 +365,6 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/windows,linux,macos,pycharm,python
 
 # <<< gitignore-generator managed section end <<<
+# Project-generated media and frontend dependencies
+/media/
+/node_modules/

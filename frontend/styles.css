@@ -1,0 +1,26 @@
+@import "tailwindcss" source(none);
+@source "../src/templates";
+
+@theme {
+  --color-ink: #153c35;
+  --color-paper: #f8f7f1;
+  --color-leaf: #e4eddf;
+  --color-clay: #d55131;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  body {
+    overflow-wrap: anywhere;
+  }
+
+  a:focus-visible {
+    outline: 3px solid #d55131;
+    outline-offset: 5px;
+  }
+
+  ::selection {
+    color: #153c35;
+    background: #f7ce69;
+  }
+}

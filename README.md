@@ -91,17 +91,23 @@ uv run python src/manage.py createsuperuser
 uv run python src/manage.py runserver 127.0.0.1:8000 --noreload
 ```
 
-초기 데이터 명령은 `presets/education/education_presets.json`과 같은 폴더의 `images/`를 읽어 프롬프트·감정탐험·관계 히어로 교육과 이미지를 설정합니다. 초기 설정을 실행할 환경에는 `presets/education/`도 포함해야 합니다. 반복 실행하면 기존 교육과 이미지 참조를 보존하고 없는 교육만 추가합니다. 입력 오류는 쓰기 전에 거부하며 저장 실패 시 DB 변경은 롤백됩니다. 저장소 파일은 남을 수 있고 다음 실행에서 재사용합니다. dev 모드에서는 원본 사이트에 접속하거나 AWS 자격 증명을 요구하지 않습니다.
+초기 데이터 명령은 `presets/education/education_presets.json`과 같은 폴더의 `images/`를 읽어 프롬프트·감정탐험·관계 히어로 교육과 이미지를 설정합니다. 초기 설정을 실행할 환경에는 `presets/education/`도 포함해야 합니다. 신규 교육에는 코치 출강 방식·상담 후 일정과 조건을 협의한다는 진행 안내·상담 접수 활성 상태를 설정하며, 과제용 운영 정책은 편집 설명으로 구별합니다. 반복 실행하면 기존 교육의 운영 정보와 이미지 참조를 보존하고 없는 교육만 추가합니다. 입력 오류는 모델과 공통인 검증으로 쓰기 전에 거부하며 저장 실패 시 DB 변경은 롤백됩니다. 저장소 파일은 남을 수 있고 다음 실행에서 재사용합니다. dev 모드에서는 원본 사이트에 접속하거나 AWS 자격 증명을 요구하지 않습니다.
 
 운영 seed는 준비된 S3에 이미지를 업로드하는 명시적 작업입니다. `uv run --no-sync python src/manage.py seed_educations --settings=config.settings.prod`를 사용하며 설정 전환 자체로 기존 파일이 복사되지는 않습니다. 실제 AWS 업로드·리소스 생성은 기본 개발·테스트에서 수행하지 않습니다.
 
-초기 콘텐츠는 [프롬프트 히어로](https://hero-school.net/visit/prompt/), [감정탐험 히어로](https://hero-school.net/visit/emotion/), [관계 히어로](https://hero-school.net/visit/relationship/)의 공개 정보를 사용합니다. 프로그램명·교시 주제·활동명은 원문 기준이고 소개·목표·대상·설명은 과제용으로 요약·편집했습니다. 수집일과 원본 이미지 URL은 `presets/education/education_presets.json`에 기록되어 있습니다. 이미지와 원문 권리는 각 권리자에게 있습니다.
+신규 이미지는 `education/<media_id의 32자 hex>/images/`에 저장합니다. `media_id`는 DB 저장 전에 생성하는 교육별 UUIDv7이며 slug와 관계없이 유지하고 편집 입력에서 제외합니다. 프리셋에는 고정 UUIDv7을 기록합니다. 초기화 명령은 원본 내용의 SHA256을 파일명으로 사용해 실패 후 남은 파일을 재사용하고, 일반 파일 저장은 원본 이름 대신 UUID를 사용합니다. 기존 이미지 경로는 유지하며 초기화 재실행이나 slug 변경으로 파일을 일괄 이동하지 않습니다.
+
+교육 삭제·일반 모델 저장을 통한 이미지 교체가 commit되면 다른 교육이 참조하지 않는 이전 파일만 정리합니다. rollback과 공유 파일은 보존하며 저장소 삭제 실패는 키·예외 종류로 기록합니다. 운영 모드에서는 S3 파일 삭제를 수반합니다. `QuerySet.update()`·`bulk_update()`·직접 SQL은 이 정리를 우회하므로 이미지 편집에는 일반 모델 저장을 사용해야 합니다. 새 파일 저장 후 DB rollback·프로세스 중단으로 고아 파일이 남을 수 있으며 자동 재시도·전수 청소는 제공하지 않습니다. 초기화 실패 파일의 재사용과 프리셋 원본 보존은 유지합니다.
+
+초기 콘텐츠는 [프롬프트 히어로](https://hero-school.net/visit/prompt/), [감정탐험 히어로](https://hero-school.net/visit/emotion/), [관계 히어로](https://hero-school.net/visit/relationship/)의 공개 정보를 사용합니다. 프로그램명·교시 주제·활동명은 원문 기준이고 소개·목표·대상·설명은 과제용으로 요약·편집했습니다. 원문·원본 이미지 URL, 수집일, 편집 설명은 `presets/education/education_presets.json`에만 기록하며 DB에 저장하거나 상세 화면에 표시하지 않습니다. 이미지와 원문 권리는 각 권리자에게 있습니다.
 
 브라우저에서 [관리자 화면](http://127.0.0.1:8000/admin/)에 접근합니다. 관리자 계정은 `createsuperuser`의 대화형 입력으로 만들며 미리 제공되는 계정·비밀번호는 없습니다. 관리자 화면은 기존 기본 기능을 유지하며 교육 편집 전용 메뉴와 신청 기능은 이번 범위에 포함하지 않습니다. [랜딩](http://127.0.0.1:8000/)에서 교육 3개를 탐색하고 각 상세에서 목표·추천대상·시수별 커리큘럼을 확인할 수 있습니다.
 
 로컬 DEBUG 설정과 Django 기본 `staticfiles`로 관리자 CSS를 제공합니다. 실행 후 로그인 폼에 스타일이 적용되고 브라우저 개발자 도구에서 `/static/admin/css/base.css`가 HTTP 200으로 응답하는지 확인합니다. 이 구성은 운영용 정적 파일 배포가 아닙니다.
 
 프로젝트 template는 `src/templates/`, static은 `src/static/`에서 통합 관리합니다. `presets/education/`은 초기 데이터 원본이며, 실행 중 교육 이미지는 dev의 `media/` 또는 prod의 S3에 저장합니다. 원본과 저장소 파일의 관리 원칙은 [아키텍처](docs/architecture.md)를 따릅니다.
+
+현재 education migration은 `0001_initial`과 Django가 재생성한 `0002_improve_education_model`입니다. 개발 이력을 정리하면서 로컬 DB를 초기화했으며, 이전 0002~0006 적용 DB에 그대로 덮어 적용하는 용도가 아닙니다. DB 초기화는 기존 교육·신청·관리자 계정 등 모든 DB 데이터를 삭제하므로 일반 실행 준비에는 필요하지 않습니다.
 
 ### CSS 개발 도구
 
@@ -136,9 +142,11 @@ Ruff 검사 대상은 `src/`의 Python 파일과 `pyproject.toml`입니다. 설�
 
 구현 완료:
 
-- 반응형 랜딩과 교육 3개의 상세 소개: 교육명·한 줄 소개·대표 이미지·목표·추천대상·시수별 커리큘럼
+- 반응형 랜딩과 교육 3개의 상세 소개: 교육명·한 줄 소개·대표 이미지·목표·추천대상·시수별 커리큘럼·운영 방식·진행 안내·상담 접수 상태
 - 누락 교육만 추가하는 초기 데이터 명령과 로컬 미디어·S3/CloudFront 저장소 설정
 - dev/prod 의존성 그룹, base/dev/prod settings 분리, Tailwind CLI 빌드
+
+교육 신청은 담당자와 상담한 뒤 일정과 진행 조건을 협의하는 접수 단계로 해석합니다. 과제의 연락 가능 날짜는 상담 가능한 날짜이며 교육 희망일과는 구별합니다. `operation_type`은 코치 출강·코스웨어를 구분하고 `operation_note`는 일반 텍스트 안내, `is_accepting_inquiries`는 접수 허용 여부입니다. 접수 중단 교육도 소개는 공개합니다. 이번에는 읽기 전용 안내와 데이터 계약만 제공하며 신청·교육 편집 기능은 아직 없습니다. 후속 신청 API는 이 접수 허용 값을 서버에서 검사해야 합니다. 기수·반·좌석 예약·결제는 범위에 포함하지 않습니다.
 
 후속 MVP:
 

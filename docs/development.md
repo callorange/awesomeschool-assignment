@@ -31,9 +31,9 @@ Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니�
 
 ## Git Workflow
 
-GitHub Flow의 기준 브랜치는 `main`, 작업 브랜치는 `feature/<change-name>`입니다. 계획과 구현은 같은 브랜치에서 별도 커밋으로 관리하고 검증 후 PR로 검토합니다. `feature/*`를 `main`에 병합할 때는 `git merge --no-ff <feature-branch>`로 merge commit을 남깁니다. GitHub PR에서는 `Create a merge commit`을 사용합니다. Conventional Commits의 영어 type과 한국어 제목을 사용합니다.
+GitHub Flow의 기준 브랜치는 `main`, 작업 브랜치는 `feature/<NNN>-<work-name>`입니다. 계획과 구현은 같은 브랜치에서 별도 커밋으로 관리하고 검증 후 PR로 검토합니다. `feature/*`를 `main`에 병합할 때는 `git merge --no-ff <feature-branch>`로 merge commit을 남깁니다. GitHub PR에서는 `Create a merge commit`을 사용합니다. Conventional Commits의 영어 type과 한국어 제목을 사용합니다.
 
-작업 브랜치는 `main`에서 생성하며 OpenSpec change가 있으면 해당 kebab-case 이름을 사용합니다. 확정한 계획을 먼저 커밋하고 구현·검증 결과는 별도 커밋으로 남깁니다. 커밋 type은 브랜치 접두사와 관계없이 변경 목적에 맞게 선택합니다. 병합을 확인한 뒤 작업 브랜치를 정리합니다.
+작업 브랜치는 `main`에서 생성하며 OpenSpec 사용 여부와 관계없이 `feature/<NNN>-<work-name>` 형식을 사용합니다. `<work-name>`은 작업을 설명하는 kebab-case 이름입니다. `NNN`은 작업 생성 순서에 따른 세 자리 순번(001부터)이며 문자 코드는 붙이지 않습니다. 새 번호는 기존 브랜치·Git 이력·OpenSpec 기록에서 사용한 최대 번호의 다음 값으로 정하고, 삭제한 브랜치의 번호는 재사용하지 않습니다. OpenSpec change가 있으면 `<work-name>`을 해당 change 이름과 일치시키고 change 이름에는 번호를 붙이지 않습니다. OpenSpec 없이 진행하는 개별 작업은 작업 내용을 기준으로 `<work-name>`을 정하며 같은 번호 순서를 사용합니다. 예를 들어 change `improve-education-model`의 브랜치는 `feature/004-improve-education-model`입니다. 확정한 계획을 먼저 커밋하고 구현·검증 결과는 별도 커밋으로 남깁니다. 커밋 type은 브랜치 접두사와 관계없이 변경 목적에 맞게 선택합니다. 병합을 확인한 뒤 작업 브랜치를 정리합니다.
 
 이 정책만으로 commit·push·PR 생성·병합·브랜치 삭제를 자동 승인하지 않습니다. 해당 작업은 사용자의 직접 요청 또는 이미 승인된 범위에서 수행합니다.
 

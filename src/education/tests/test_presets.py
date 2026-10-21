@@ -4,7 +4,9 @@ from pathlib import Path
 from shutil import copytree
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from uuid import uuid4, uuid7
 
+from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -41,13 +43,35 @@ class PresetTests(TestCase):
     def test_seed_and_rerun_preserve_data_and_images(self):
         self.assertIn("생성 3개", self.seed())
         self.assertEqual(Education.objects.count(), 3)
+        for education in Education.objects.all():
+            self.assertRegex(
+                education.image.name,
+                rf"^education/{education.media_id.hex}/images/[0-9a-f]{{64}}\.png$",
+            )
+            self.assertEqual(education.operation_type, "instructor_led")
+            self.assertEqual(
+                education.operation_note,
+                "교육 일정과 진행 조건은 상담 후 협의하여 확정합니다.",
+            )
+            self.assertIs(education.is_accepting_inquiries, True)
         original = self.files()
         self.assertEqual(len(original), 3)
         education = Education.objects.get(slug="prompt-hero")
         education.summary = "사용자가 수정한 소개"
-        education.save(update_fields=["summary"])
+        education.operation_type = Education.OperationType.COURSEWARE
+        education.operation_note = "사용자가 수정한 운영 안내"
+        education.is_accepting_inquiries = False
+        education.save(
+            update_fields=[
+                "summary",
+                "operation_type",
+                "operation_note",
+                "is_accepting_inquiries",
+            ]
+        )
         # 같은 이미지를 참조하는 별도 교육도 재실행으로 훼손되지 않아야 한다.
         education.pk = None
+        education.media_id = uuid7()
         education.slug = "other-education"
         education.save()
         self.assertIn("생성 0개, 건너뜀 3개", self.seed())
@@ -56,6 +80,10 @@ class PresetTests(TestCase):
             Education.objects.get(slug="prompt-hero").summary, "사용자가 수정한 소개"
         )
         self.assertEqual(self.files(), original)
+        education = Education.objects.get(slug="prompt-hero")
+        self.assertEqual(education.operation_type, "courseware")
+        self.assertEqual(education.operation_note, "사용자가 수정한 운영 안내")
+        self.assertIs(education.is_accepting_inquiries, False)
 
     def test_partial_database_reuses_existing_image(self):
         self.seed()
@@ -65,17 +93,49 @@ class PresetTests(TestCase):
         self.assertEqual(Education.objects.count(), 3)
         self.assertEqual(self.files(), original)
 
+    def test_legacy_image_reference_is_preserved(self):
+        storage = FileSystemStorage(location=self.media, base_url="/media/")
+        key = storage.save("education/presets/legacy.png", ContentFile(b"legacy"))
+        Education.objects.create(slug="prompt-hero", image=key)
+        self.assertIn("생성 2개, 건너뜀 1개", self.seed())
+        education = Education.objects.get(slug="prompt-hero")
+        self.assertEqual(education.image.name, key)
+        self.assertEqual((self.media / key).read_bytes(), b"legacy")
+        self.assertEqual(len(self.files()), 3)
+
     def test_invalid_input_or_missing_image_has_no_side_effects(self):
         destination = self.root / "data"
         copytree(seed_educations.PRESET_PATH.parent, destination)
         source = destination / "education_presets.json"
         records = json.loads(source.read_text(encoding="utf-8"))
-        for change in ("missing-image", "empty-goals", "period-order"):
+        for change in (
+            "missing-image",
+            "empty-goals",
+            "period-order",
+            "unknown-operation",
+            "missing-description",
+            "missing-media-id",
+            "invalid-media-id",
+            "duplicate-media-id",
+            "wrong-uuid-version",
+        ):
             modified = json.loads(json.dumps(records))
             if change == "missing-image":
                 modified[-1]["image"] = "images/missing.png"
             elif change == "empty-goals":
                 modified[-1]["goals"] = []
+            elif change == "unknown-operation":
+                modified[-1]["operation_type"] = "unknown"
+            elif change == "missing-description":
+                del modified[-1]["curriculum"][0]["lessons"][0]["description"]
+            elif change == "missing-media-id":
+                del modified[-1]["media_id"]
+            elif change == "invalid-media-id":
+                modified[-1]["media_id"] = "../invalid"
+            elif change == "duplicate-media-id":
+                modified[-1]["media_id"] = modified[0]["media_id"]
+            elif change == "wrong-uuid-version":
+                modified[-1]["media_id"] = str(uuid4())
             else:
                 modified[-1]["curriculum"][0]["lessons"][0]["period"] = 9
             source.write_text(json.dumps(modified), encoding="utf-8")

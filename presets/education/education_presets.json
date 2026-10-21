@@ -1,6 +1,7 @@
 [
   {
     "slug": "prompt-hero",
+    "media_id": "01a15dd4-24fa-76fd-9892-7bcad31bc05b",
     "title": "프롬프트 히어로",
     "summary": "나만의 AI 멘토를 만들며 진로와 학습의 방향을 설계해요.",
     "image": "images/prompt.png",
@@ -88,11 +89,15 @@
     "source_url": "https://hero-school.net/visit/prompt/",
     "source_image_url": "https://awesomeschool-portal.s3.amazonaws.com/portal/static/images/education/prompt/character.png",
     "collected_on": "2026-10-21",
-    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다.",
-    "display_order": 1
+    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다. 진행 안내와 상담 접수 상태는 과제용 운영 정책입니다.",
+    "display_order": 1,
+    "operation_type": "instructor_led",
+    "operation_note": "교육 일정과 진행 조건은 상담 후 협의하여 확정합니다.",
+    "is_accepting_inquiries": true
   },
   {
     "slug": "emotion-hero",
+    "media_id": "01a15dd4-24fa-76fd-9892-7bcb388e27ef",
     "title": "감정탐험 히어로",
     "summary": "내 마음의 신호를 발견하고 친구의 마음을 이해해요.",
     "image": "images/emotion.png",
@@ -163,11 +168,15 @@
     "source_url": "https://hero-school.net/visit/emotion/",
     "source_image_url": "https://awesomeschool-portal.s3.amazonaws.com/portal/static/images/education/emotion/character.png",
     "collected_on": "2026-10-21",
-    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다.",
-    "display_order": 2
+    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다. 진행 안내와 상담 접수 상태는 과제용 운영 정책입니다.",
+    "display_order": 2,
+    "operation_type": "instructor_led",
+    "operation_note": "교육 일정과 진행 조건은 상담 후 협의하여 확정합니다.",
+    "is_accepting_inquiries": true
   },
   {
     "slug": "relationship-hero",
+    "media_id": "01a15dd4-24fa-76fd-9892-7bccabfa171a",
     "title": "관계 히어로",
     "summary": "마음의 문제를 함께 풀며 존중하는 관계를 만들어요.",
     "image": "images/relationship.png",
@@ -238,7 +247,10 @@
     "source_url": "https://hero-school.net/visit/relationship/",
     "source_image_url": "https://awesomeschool-portal.s3.amazonaws.com/portal/static/images/education/relationship/character.png",
     "collected_on": "2026-10-21",
-    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다.",
-    "display_order": 3
+    "editorial_note": "교육명·교시 주제·활동명은 원문 기준이며 소개·목표·대상·활동 설명은 과제용으로 요약·편집했습니다. 진행 안내와 상담 접수 상태는 과제용 운영 정책입니다.",
+    "display_order": 3,
+    "operation_type": "instructor_led",
+    "operation_note": "교육 일정과 진행 조건은 상담 후 협의하여 확정합니다.",
+    "is_accepting_inquiries": true
   }
 ]

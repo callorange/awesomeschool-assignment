@@ -2,12 +2,15 @@
   "name": "awesomeschool-assignment-frontend",
   "private": true,
   "scripts": {
-    "vendor:axios": "node scripts/copy-axios.mjs",
+    "build": "npm run build:css && npm run build:js",
     "build:css": "tailwindcss -i ./frontend/styles.css -o ./src/static/css/site.css --minify",
-    "watch:css": "tailwindcss -i ./frontend/styles.css -o ./src/static/css/site.css --watch"
+    "build:js": "esbuild \"./frontend/entries/*.js\" --bundle --splitting --format=esm --platform=browser --minify --sourcemap --legal-comments=linked --chunk-names=chunks/[name]-[hash] --outdir=./src/static/js",
+    "watch:css": "tailwindcss -i ./frontend/styles.css -o ./src/static/css/site.css --watch",
+    "watch:js": "npm run build:js -- --watch"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.0.0",
+    "esbuild": "0.28.2",
     "tailwindcss": "^4.0.0"
   },
   "dependencies": {

@@ -125,6 +125,9 @@ class EducationPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "education/application.html")
         self.assertIn("csrftoken", response.cookies)
+        self.assertContains(response, "/static/js/application.js", count=1)
+        for path in ("/", "/educations/prompt-hero/"):
+            self.assertNotContains(self.client.get(path), "/static/js/application.js")
         for text in (
             'data-education-url="/api/educations/prompt-hero/"',
             'data-submit-url="/api/applications/"',
@@ -132,7 +135,6 @@ class EducationPageTests(TestCase):
             'autocomplete="email"',
             'type="date"',
             'aria-live="polite"',
-            "/static/js/application.js",
             "주소 검색",
             "직접 입력",
         ):

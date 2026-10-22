@@ -21,7 +21,7 @@
 
 **macOS/Linux의 Bash 기준**입니다. 저장소를 내려받은 뒤 루트 디렉터리에서 실행합니다.
 준비 도구는 **[uv](https://docs.astral.sh/uv/getting-started/installation/)와 [Docker Compose v2](https://docs.docker.com/compose/install/)**입니다. Docker 엔진을 먼저 실행해 주세요. Python은 uv가 `.python-version`에 맞춰 준비합니다.
-CSS·Axios가 저장소에 포함되어 **Node.js·프론트 빌드·AWS 자격 증명 없이 실행**할 수 있습니다.
+빌드된 CSS·JavaScript가 저장소에 포함되어 **Node.js·프론트 빌드·AWS 자격 증명 없이 실행**할 수 있습니다.
 
 ### 1. 의존성 설치
 
@@ -139,7 +139,7 @@ SES 접수 성공은 실제 수신함 도착을 의미하지 않습니다. 외�
 
 ## 기술 스택·폴더 구조
 
-Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-ses 4.8.2 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
+Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-ses 4.8.2 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
 
 ```text
 src/
@@ -148,12 +148,15 @@ src/
         tasks.py        # 실제 Q2 task와 실행 흐름
         tasks_support/  # 긴 상담 안내 task의 내부 처리
     templates/          # 공통 layout·교육/신청 화면·메일 본문
-    static/             # 빌드 CSS·신청 JavaScript·Axios 배포 자산
+    static/             # 빌드 CSS·Axios 포함 JS·source map·라이선스 고지
 presets/education/      # 교육 3개의 초기 데이터·이미지 원본
-frontend/              # Tailwind 입력 CSS
+frontend/              # 입력 CSS·직접 편집하는 JavaScript
+    entries/            # 페이지·공통 기능별 JavaScript 진입 파일
 docs/guides/            # 검토자를 위한 기능 검증·운영 설명
 openspec/               # 변경 명세·설계·작업 기록
 ```
+
+화면 자산을 수정하는 개발자는 `npm ci` 후 `npm run build` 한 번으로 CSS·JavaScript를 생성합니다. [개발용 빌드·변경 감시](docs/guides/operations.md#로컬-문제-해결화면-자산-수정)를 참고하세요.
 
 ## 자동 검증
 

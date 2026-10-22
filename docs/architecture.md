@@ -13,8 +13,8 @@
 | `src/education/` | 교육·신청·안내 모델, 공개 API·화면, 메일·이미지 작업과 관리 명령 |
 | `src/education/migrations/` | 교육 모델의 DB schema 변경 이력 |
 | `src/templates/` | 공통 layout과 기능별 template를 담는 통합 폴더 |
-| `src/static/` | 빌드 CSS 등 프로젝트 정적 자산을 담는 통합 폴더 |
-| `frontend/styles.css`, `package.json`, `package-lock.json` | Tailwind 입력·npm CLI 명령·설치 조합 |
+| `src/static/` | 빌드 CSS·JS·source map·라이선스 고지 등 배포 정적 자산을 담는 통합 폴더 |
+| `frontend/`, `package.json`, `package-lock.json` | CSS·JavaScript 소스, 통합 빌드 명령·의존성 설치 조합 |
 | `presets/education/` | 초기화용 JSON 프리셋과 이미지 원본 |
 | `src/education/tests/` | 설정·모델·프리셋·교육/신청 화면·API·메일·이미지·qcluster 테스트 |
 | `media/` | dev에서 생성되는 실행 중 미디어 파일; Git 제외 |
@@ -23,12 +23,19 @@
 
 프로젝트 소유 template와 static은 앱별로 만들지 않고 `src/templates/`와 `src/static/`에 통합합니다. 공통 layout은 `src/templates/base.html`, 교육 화면은 `src/templates/education/`, 빌드 CSS는 `src/static/css/site.css`에 둡니다. Django의 TEMPLATES DIRS와 STATICFILES_DIRS에 통합 경로를 등록하며, Django admin 등 설치 앱의 자산 탐색은 유지합니다. Tailwind 탐색은 해당 template 경로로 제한하며 규칙·스킬 파일을 탐색하지 않습니다. 이미지 원본은 `presets/education/images/`에 포함하고 실행 시 선택한 media 저장소에 설정합니다.
 
+## JavaScript 진입점과 페이지별 로딩
+
+- `frontend/entries/*.js`는 브라우저가 시작점으로 로드할 파일입니다. 현재 신청 전용 진입점은 `application.js`입니다. 전체 공통·백오피스 공통·다른 페이지의 진입점은 실제 기능이 생길 때 추가합니다.
+- 여러 진입점에서 재사용하는 모듈은 필요할 때 `frontend/shared/`에 두고 import합니다. 이 폴더의 모듈은 직접 로드할 진입 파일로 빌드하지 않습니다.
+- `npm run build`는 모든 진입점을 함께 빌드하되, 각 template은 필요한 진입 파일만 `type="module"`로 로드합니다. 전체 공통 기능은 `base.html`의 `common_scripts`, 백오피스 등 영역 공통 기능은 해당 영역 base template의 `section_scripts`, 페이지 전용 기능은 해당 페이지의 `scripts` 블록에 둡니다. 현재 공통 블록은 비어 있으며 신청 페이지에서만 `application.js`를 로드합니다.
+- Axios 등 라이브러리를 사용하는 진입점만 해당 라이브러리를 import합니다. esbuild는 여러 진입점의 공통 의존성을 `src/static/js/chunks/`에 분리하고 생성된 import로 연결하므로 template에서 chunk 경로를 직접 지정하지 않습니다.
+
 ## 기술 선택
 
 - **Python 3.14 / Django 6.1.2**: 기존 호환성 제약이 없는 신규 프로젝트의 기준입니다. Django를 `6.1.2`로 고정하고 lockfile로 정확한 설치 조합을 재현합니다. 장기 운영 시 Django 6.1 지원 종료 전에 업그레이드하며 보안 패치를 계속 확인합니다.
 - **DRF**: 과제에서 지정한 API 프레임워크입니다. 교육정보 GET·신청 POST를 제공하며 관리자 전용 신청 조회는 후속 범위입니다.
 - **PostgreSQL 18.6 / Psycopg 3**: 개발·테스트 DB를 통일합니다. SQLite 대체 경로는 두지 않습니다. `postgres:18.6-bookworm`을 사용하고 volume은 `/var/lib/postgresql`에 마운트합니다.
-- **Django Templates / Tailwind CSS / Axios**: 랜딩·교육 상세·신청 화면을 단일 서버에서 제공합니다. Tailwind CSS 4의 npm CLI와 별도로 버전을 고정한 Axios 브라우저 자산·라이선스를 배포합니다. CSS와 Axios 생성물을 저장소에 포함하며 별도 프론트 서버·SPA·평가 실행 시 Node.js는 요구하지 않습니다. 주소 검색은 Kakao 공식 SDK를 요청할 때만 로딩하고 직접 입력 대안을 유지합니다.
+- **Django Templates / Tailwind CSS / Axios**: 랜딩·교육 상세·신청 화면을 단일 서버에서 제공합니다. Tailwind CSS CLI와 esbuild를 `npm run build`로 실행해 CSS와 Axios를 포함한 JS 번들을 생성합니다. 직접 편집하는 소스는 `frontend/`, 배포 산출물은 `src/static/`에 두고 source map·라이선스 고지와 함께 저장소에 포함하며 별도 프론트 서버·SPA·평가 실행 시 Node.js는 요구하지 않습니다. 주소 검색은 Kakao 공식 SDK를 요청할 때만 로딩하고 직접 입력 대안을 유지합니다.
 - **Django admin**: MVP의 신청 CRUD와 상태 관리 화면으로 사용할 예정입니다. 별도 관리자 신청 목록 화면은 MVP 이후 항목입니다.
 - **django-environ**: 관리 명령·WSGI·ASGI가 같은 설정 로딩 경로를 사용하도록 Django 설정에서 `.env`를 읽고 boolean·목록을 해석합니다.
 - **uv / Ruff / Django test runner**: 런타임 의존성과 개발 의존성을 분리하고, 별도 테스트 프레임워크 없이 필요한 계약을 검증합니다.

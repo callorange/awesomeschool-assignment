@@ -132,7 +132,9 @@ uv run ruff format --check .
 | qcluster | 실제 subprocess 4개 테스트: 새 task 경로·후속 검사·run-once 정상 종료/결과 저장·강제 종료 복구·이미지 실패 재등록 |
 | 실제 브라우저 | 교육 GET → 주소 검색/입력 → 신청 POST → 접수 표시, 응답 유실·CSRF·400·409·SDK 장애 |
 | 반응형 | desktop 브라우저 360/390/768/1280px에서 넘침 없음·48px 입력 높이·오류/주소 focus |
-| 배포 자산 | 같은 npm lock으로 재설치·재생성한 CSS·Axios ESM/source map/라이선스 hash 일치, 실제 서버 HTTP 200 |
+| 배포 자산 | lockfile·캐시 기반 재설치 후 `npm run build`로 생성한 CSS·JS·source map·라이선스 4개 hash 일치·HTTP 200. 외부 JS import 없는 번들·Axios 라이선스 원문 보존 확인 |
+| JS 번들 실행 | 브라우저에서 교육 GET·주소 SDK fixture·Axios POST의 400 필드 오류와 이메일 포커스 확인 |
+| 진입점·페이지별 로딩 | 임시 진입점 자동 탐색·Axios 공통 chunk 분리·생성 모듈 실행 확인. Django 페이지 테스트 10개 통과: 신청 페이지만 신청 JS를 한 번 로드 |
 | 미검증 | macOS/Linux 전체 실행·Linux 서비스 종료 신호·Android Chrome/iOS Safari 실기기·실제 AWS 발송/수신/S3 삭제 |
 
 SES 접수 여부가 불명확한 `unknown`은 자동 해소하지 못합니다. 중복 방지를 위해 자동 재발송하지 않으므로 실제 미발송일 가능성도 남습니다. 신청 관리 CRUD·관리자 신청 목록·Spreadsheet 내보내기·SNS/웹훅·실제 전달/반송 추적은 미구현입니다.

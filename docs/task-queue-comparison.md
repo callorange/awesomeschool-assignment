@@ -93,7 +93,7 @@ Celery는 `SIGTERM`으로 실행 중인 작업을 기다리는 warm shutdown을 
 
 근거: [Q2 종료 절차](https://django-q2.readthedocs.io/en/master/architecture.html#stop-procedure), [Celery 종료](https://docs.celeryq.dev/en/stable/userguide/workers.html#stopping-the-worker), [Celery 재시작](https://docs.celeryq.dev/en/stable/userguide/workers.html#restarting-the-worker), [Celery Windows 지원](https://docs.celeryq.dev/en/stable/faq.html#does-celery-support-windows), [Q2 timeout](https://django-q2.readthedocs.io/en/master/configure.html#timeout).
 
-## 이 프로젝트의 선택과 검증 범위
+## 이 프로젝트의 선택과 적용 기준
 
 확정한 선택:
 
@@ -105,10 +105,8 @@ Celery는 `SIGTERM`으로 실행 중인 작업을 기다리는 warm shutdown을 
 - 별도 DLQ는 보류하고 Q2의 실패 작업 확인·재등록 기능을 활용한다. 이 기능은 전용 broker DLQ와 구분한다.
 - 신청 관리 CRUD는 후속 범위이며 이번에는 접수 상태 저장·표시만 다룬다.
 
-worker 2개·timeout 60초·broker retry 300초·작은 내부 대기량으로 구성했다. 메일은 발송 기록으로 일반 일시 오류 5분/15분·일일 한도 24시간 대기·총 3회 제한을 적용하고 결과 불명은 재전송하지 않는다. 이미지는 작업별 ack_failure=False와 max_attempts=3을 사용한다. Django 이메일 API의 dev locmem/prod django-ses 선택·공유 전송 예산·실행 명령과 운영 전제는 [운영 가이드](guides/operations.md#백그라운드-worker와-자동-안내)를 따른다.
+worker 2개·timeout 60초·broker retry 300초·작은 내부 대기량을 사용한다. 메일은 발송 기록으로 일반 일시 오류 5분/15분·일일 한도 24시간 대기·총 3회 제한을 적용하고 결과 불명은 재전송하지 않는다. 이미지는 작업별 ack_failure=False와 max_attempts=3을 사용한다. Django 이메일 API의 dev locmem/prod django-ses 선택·공유 전송 예산·실행 명령과 운영 전제는 [운영 가이드](guides/operations.md#백그라운드-worker와-자동-안내)를 따른다.
 
-상담 안내 이메일 task는 `enqueue_consultation_reminder_emails`·`send_consultation_reminder_email`, 이미지 task는 `delete_unreferenced_education_image`다. Q2는 함수 경로를 스케줄·큐에 저장하므로 함수 이름 변경 시 코드와 영속 경로를 함께 전환해야 한다. 기존 큐를 기존 worker로 처리·정상 종료한 뒤 새 코드와 스케줄을 적용하는 절차와 과거 이미지 실패 재등록 방법은 [기존 task 경로 전환](guides/operations.md#기존-task-경로-전환)을 따른다.
+Q2는 함수 경로를 스케줄·큐에 저장하므로 함수 이름 변경 시 코드와 영속 경로를 함께 전환해야 한다. 절차는 [task 경로 변경 시 운영 절차](guides/operations.md#task-경로-변경-시-운영-절차)를 따른다.
 
-신청·안내의 원자적 저장과 이미지 변경·ORM 큐의 같은 transaction 기록을 실제 PostgreSQL에서 검증했다. Q2 실패 목록은 등록되지 않은 작업을 복구하지 않으므로 메일은 영속 대상에서 재발견하고 이미지 큐 등록 실패는 DB 변경도 rollback한다. 이미지 작업의 참조 재검사와 메일의 원자적 처리권을 동시 실행·중복 작업으로 확인했다.
-
-Windows에서 실제 qcluster subprocess의 run-once 정상 종료·결과 flush, 프로세스 트리 강제 종료 후 queued 복구/sending의 unknown 보존, 이미지 실패 후 재등록을 검증했다. 운영 SES는 실제 django-ses backend와 fake SDK로 검증하며 실제 AWS 연결·수신·Linux 서비스 관리자 종료 신호는 미검증이다. Windows의 강제 종료를 graceful shutdown 성공으로 간주하지 않는다. 실제 운영 한도는 [SES 발송 한도](https://docs.aws.amazon.com/ses/latest/dg/manage-sending-quotas.html)를 따른다.
+Q2 실패 목록은 등록되지 않은 작업을 복구하지 않는다. 메일은 영속 대상에서 재발견하고 이미지 큐 등록 실패는 DB 변경도 rollback하도록 설계한다. 실제 검증 결과와 환경별 한계는 [검증 가이드](guides/verification.md#검증-기록과-한계)에서 관리한다. 운영 전송 속도는 [SES 발송 한도](https://docs.aws.amazon.com/ses/latest/dg/manage-sending-quotas.html)를 따른다.

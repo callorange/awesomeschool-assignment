@@ -1,0 +1,73 @@
+{% extends 'backoffice/base.html' %}
+{% load static %}
+{% block title %}신청 상세{% endblock %}
+{% block heading %}
+  <a href="{% url 'backoffice:application-list' %}" class="inline-flex min-h-11 items-center text-sm underline">← 신청 목록</a>
+  <h1 class="mt-3 text-3xl font-black">신청 상세</h1>
+  <p class="mt-3 text-sm text-ink/65">{{ application.education_title }} · {{ application.created_at|date:'Y.m.d H:i' }} 접수</p>
+{% endblock %}
+{% block content %}
+  <div class="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <div class="min-w-0 space-y-6">
+      <form method="post" class="space-y-6 [&_input:not([type=checkbox]):not([type=hidden])]:min-h-12 [&_input:not([type=checkbox]):not([type=hidden])]:w-full [&_input:not([type=checkbox]):not([type=hidden])]:min-w-0 [&_input:not([type=checkbox]):not([type=hidden])]:rounded-lg [&_input:not([type=checkbox]):not([type=hidden])]:border [&_input:not([type=checkbox]):not([type=hidden])]:border-ink/25 [&_input:not([type=checkbox]):not([type=hidden])]:px-3 [&_select]:min-h-12 [&_select]:w-full [&_select]:min-w-0 [&_select]:rounded-lg [&_select]:border [&_select]:border-ink/25 [&_select]:px-3 [&_textarea]:w-full [&_textarea]:rounded-lg [&_textarea]:border [&_textarea]:border-ink/25 [&_textarea]:p-3 [&_input:focus]:outline-2 [&_input:focus]:outline-clay [&_select:focus]:outline-2 [&_select:focus]:outline-clay [&_textarea:focus]:outline-2 [&_textarea:focus]:outline-clay">
+        {% csrf_token %}
+        <section class="min-w-0 rounded-2xl border border-ink/10 bg-white p-5 md:p-7">
+          <h2 class="text-lg font-bold">신청 정보</h2>
+          <p class="mt-2 text-xs leading-5 text-ink/60">일정은 한국 시각입니다. 신청·상담은 삭제하지 않으며 변경 이력은 Django admin에서 확인합니다.</p>
+          {% if application_form %}
+            <div class="mt-6 grid gap-5 sm:grid-cols-2">{% include 'backoffice/fields.html' with form=application_form %}</div>
+          {% else %}
+            <dl class="mt-6 grid gap-5 text-sm sm:grid-cols-2">
+              <div><dt class="text-ink/60">이름</dt><dd class="mt-1 font-semibold">{{ application.name }}</dd></div>
+              <div><dt class="text-ink/60">이메일</dt><dd class="mt-1 break-all">{{ application.email }}</dd></div>
+              <div class="sm:col-span-2"><dt class="text-ink/60">주소</dt><dd class="mt-1">{{ application.postal_code }} {{ application.address }} {{ application.address_detail }}</dd></div>
+              <div><dt class="text-ink/60">연락 가능 날짜</dt><dd class="mt-1">{{ application.contact_date|date:'Y.m.d' }}</dd></div>
+              <div><dt class="text-ink/60">상태</dt><dd class="mt-1">{{ application.get_status_display }}</dd></div>
+              <div><dt class="text-ink/60">다음 연락 예정</dt><dd class="mt-1">{{ application.next_contact_at|date:'Y.m.d H:i'|default:'미정' }}</dd></div>
+              {% if application.cancellation_reason %}<div><dt class="text-ink/60">취소 사유</dt><dd class="mt-1">{{ application.cancellation_reason }}</dd></div>{% endif %}
+            </dl>
+          {% endif %}
+        </section>
+        {% if consultation_form %}
+          <section class="rounded-2xl border border-ink/10 bg-white p-5 md:p-7">
+            {% if application_form %}
+              <input id="include-consultation" class="peer mr-3 h-5 w-5 align-middle accent-ink" type="checkbox" name="include_consultation" {% if include_consultation %}checked{% endif %}>
+              <label for="include-consultation" class="inline-flex min-h-12 cursor-pointer items-center align-middle font-bold">상담 기록도 추가</label>
+              <fieldset class="mt-5 hidden space-y-5 peer-checked:block">
+                <legend class="sr-only">새 상담 기록</legend>
+                {% include 'backoffice/fields.html' with form=consultation_form %}
+              </fieldset>
+            {% else %}
+              <h2 class="mb-5 text-lg font-bold">상담 추가</h2>
+              <div class="space-y-5">{% include 'backoffice/fields.html' with form=consultation_form %}</div>
+            {% endif %}
+          </section>
+        {% endif %}
+        {% if application_form %}<button type="submit" name="action" value="save_application" class="min-h-12 w-full cursor-pointer rounded-xl bg-ink px-6 py-3 font-bold text-white sm:w-auto">변경사항 저장</button>{% elif consultation_form %}<button type="submit" name="action" value="add_consultation" class="min-h-12 w-full cursor-pointer rounded-xl bg-ink px-6 py-3 font-bold text-white sm:w-auto">상담 추가</button>{% endif %}
+      </form>
+      {% if perms.education.view_consultationrecord %}
+        <section class="rounded-2xl border border-ink/10 bg-white p-5 md:p-7">
+          <h2 class="text-lg font-bold">상담 기록</h2>
+          <p class="mt-2 text-xs text-ink/60">기존 기록은 유지하며 필요한 경우 새 정정 기록을 추가합니다.</p>
+          {% for record in consultations %}
+            <article class="mt-5 border-t border-ink/10 pt-5">
+              <div class="flex flex-wrap justify-between gap-2 text-sm"><strong>{{ record.get_result_display }}</strong><span class="text-xs text-ink/60">{{ record.author }} · {{ record.created_at|date:'Y.m.d H:i' }}</span></div>
+              <p class="mt-3 whitespace-pre-wrap text-sm leading-6">{{ record.content }}</p>
+              <p class="mt-3 text-xs text-ink/60">기록 #{{ record.pk }} · 당시 다음 연락: {{ record.next_contact_at|date:'Y.m.d H:i'|default:'미정' }}{% if record.corrects_id %} · 정정 원기록 #{{ record.corrects_id }}{% endif %}</p>
+            </article>
+          {% empty %}<p class="mt-5 text-sm text-ink/60">아직 상담 기록이 없습니다.</p>{% endfor %}
+        </section>
+      {% endif %}
+    </div>
+    {% if notification %}
+      <section class="rounded-2xl border border-ink/10 bg-white p-5" aria-labelledby="email-title">
+        <h2 id="email-title" class="text-lg font-bold">자동 안내 이메일</h2>
+        <div id="email-status">{% include 'backoffice/email_status.html' %}</div>
+        <button id="refresh-email" type="button" disabled data-url="{% url 'backoffice:email-status' application.pk %}" class="mt-5 min-h-11 w-full cursor-pointer rounded-lg border border-ink/25 px-4 text-sm font-semibold disabled:cursor-wait disabled:opacity-50">상태 새로고침</button>
+        <p id="email-feedback" role="status" aria-live="polite" class="mt-3 text-xs leading-5 text-ink/65">부분 갱신은 JavaScript 로드 후 사용할 수 있습니다. 전체 재조회 시 작성 중인 입력은 유지되지 않습니다.</p>
+        <a id="email-login" href="{% url 'backoffice:login' %}?next={% url 'backoffice:application-detail' application.pk %}" target="_blank" rel="noopener" hidden class="mt-3 inline-flex min-h-11 items-center text-sm underline">별도 탭에서 로그인 ↗</a>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}
+{% block scripts %}{% if notification %}<script type="module" src="{% static 'js/backoffice-detail.js' %}"></script>{% endif %}{% endblock %}

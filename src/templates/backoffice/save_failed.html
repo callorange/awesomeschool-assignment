@@ -1,0 +1,9 @@
+{% extends 'backoffice/base.html' %}
+{% block title %}저장 결과를 확인하지 못했습니다{% endblock %}
+{% block content %}
+  <section class="mx-auto max-w-xl rounded-2xl border border-ink/10 bg-white p-8">
+    <h1 class="text-2xl font-black">저장 결과를 확인하지 못했습니다</h1>
+    <p class="mt-4 leading-7">저장 처리 중 오류가 발생했습니다. 신청 상세에서 현재 결과를 확인한 뒤 다시 시도해 주세요. 자동으로 다시 제출하지 않습니다.</p>
+    <a href="{% url 'backoffice:application-list' %}" class="mt-6 inline-flex min-h-12 items-center rounded-lg bg-ink px-5 font-bold text-white">신청 목록으로 이동</a>
+  </section>
+{% endblock %}

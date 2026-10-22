@@ -1,0 +1,10 @@
+{% extends 'backoffice/base.html' %}
+{% block title %}저장하지 못했습니다{% endblock %}
+{% block content %}
+  <section class="mx-auto max-w-xl rounded-2xl border border-ink/10 bg-white p-8">
+    <h1 class="text-2xl font-black">저장하지 못했습니다</h1>
+    <p class="mt-4 leading-7">로그인 상태 또는 보안 확인이 만료되었거나 유효하지 않습니다. 이번 요청은 저장되지 않았습니다. 다시 로그인한 뒤 내용을 확인해 주세요.</p>
+    <p class="mt-3 text-sm text-ink/65">이 오류에서는 작성 내용을 자동 복구하거나 다시 제출하지 않습니다.</p>
+    <a href="{% url 'backoffice:login' %}" class="mt-6 inline-flex min-h-12 items-center rounded-lg bg-ink px-5 font-bold text-white">로그인으로 이동</a>
+  </section>
+{% endblock %}

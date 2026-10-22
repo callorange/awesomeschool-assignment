@@ -19,7 +19,7 @@
 | `src/templates/` | 공통 layout과 기능별 template를 담는 통합 폴더 |
 | `src/static/` | 빌드 CSS·JS·source map·라이선스 고지 등 배포 정적 자산을 담는 통합 폴더 |
 | `frontend/`, `package.json`, `package-lock.json` | CSS·JavaScript 소스, 통합 빌드 명령·의존성 설치 조합 |
-| `presets/education/` | 초기화용 JSON 프리셋과 이미지 원본 |
+| `presets/education/` | 교육 JSON·이미지 원본과 선택 생성용 신청 JSON 프리셋 |
 | `src/education/tests/` | 설정·모델·프리셋·공개 화면·백오피스·admin·API·메일·이미지·qcluster 테스트 |
 | `media/` | dev에서 생성되는 실행 중 미디어 파일; Git 제외 |
 | `docs/` | 과제 원문과 프로젝트 설계 설명 |
@@ -73,7 +73,7 @@
 
 uv는 `[tool.uv] package = false`인 비패키지 방식으로 사용합니다. 애플리케이션 자체를 빌드·설치할 필요가 없으므로 `[build-system]`을 두지 않습니다. 배포용 Python 라이브러리의 build backend 규칙과 구분합니다.
 
-공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`, `django-simple-history`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
+공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`, `django-simple-history`, `python-dateutil`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
 
 새 Django 프로젝트와 앱의 기본 골격은 LLM이 직접 작성하지 않고 Django의 `startproject`·`startapp` 명령으로 생성한 뒤 필요한 설정을 편집합니다. Django 기본 인증·admin·CSRF middleware를 유지합니다. 테스트는 앱의 `tests/` 패키지에 두며 같은 앱에 `tests.py`를 함께 두지 않습니다.
 

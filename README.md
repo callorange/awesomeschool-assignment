@@ -3,7 +3,7 @@
 교육 소개를 확인한 방문자가 상담을 신청하고, 연락 가능 날짜에 안내를 받는 Django 사전 과제입니다.
 신청은 수강 확정이 아닌 **상담 접수**로 해석했습니다. 연락 가능 날짜도 교육 희망일과 구분합니다.
 
-[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [백오피스](#담당자용-백오피스) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
+[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [백오피스](#담당자용-백오피스) · [신청 샘플](#선택-백오피스-신청-샘플-32건) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
 
 ## 구현 범위
 
@@ -14,6 +14,7 @@
 | 신청 관리 | 반응형 백오피스와 기본 admin에서 조회·정정·상담·재연락·상태 관리. 변경 이력은 admin 조회. 신청 삭제 금지 |
 | DRF API | 신청 화면용 교육정보 GET·신청 POST·검증·반복 제출 보호 |
 | 자동 안내 | Q2 날짜별 검사·개발 모의 처리·운영 SES backend·선별 재시도 |
+| 개발 프리셋 | 교육 3개·이미지 기본 준비, 기존 staff를 지정해 신청 32건·상담·모의 이메일 상태 선택 생성 |
 
 별도 백오피스는 신청·상담 관리와 이메일 처리 상태 조회에 집중하고 교육·계정·권한·이력 상세와 내부 task 기록은 Django admin에서 확인합니다. Google Spreadsheet 내보내기는 미구현입니다. 과제의 삭제 항목 대신 신청·상담 기록을 보존하고 완료·취소로 처리하는 정책을 선택했습니다. AWS는 SES·S3/CloudFront 설정을 구현했으며 실제 배포와 운영 static 서빙은 포함하지 않았습니다.
 
@@ -71,6 +72,8 @@ uv run python src/manage.py migrate --noinput
 uv run python src/manage.py seed_educations
 uv run python src/manage.py check
 ```
+
+백오피스용 신청 샘플도 확인하려면 worker를 시작하기 전에 [선택 샘플 준비](#선택-백오피스-신청-샘플-32건)를 진행합니다. 기본 명령은 신청이나 계정을 생성하지 않습니다.
 
 ### 5. 자동 안내 스케줄 등록
 
@@ -160,7 +163,7 @@ SES 접수 성공은 실제 수신함 도착을 의미하지 않습니다. 외�
 
 ## 기술 스택·폴더 구조
 
-Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-simple-history 3.13.0 · django-ses 4.8.2 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
+Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-simple-history 3.13.0 · django-ses 4.8.2 · python-dateutil 2.9.0.post0 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
 
 ```text
 src/
@@ -174,7 +177,7 @@ src/
         migrations/     # 전체 모델을 생성하는 0001_initial.py
     templates/          # 공개 화면·백오피스 layout·메일 본문·admin 위젯
     static/             # 빌드 CSS·Axios 포함 JS·source map·라이선스 고지
-presets/education/      # 교육 3개의 초기 데이터·이미지 원본
+presets/education/      # 교육 3개·이미지 원본·선택 생성용 신청 32건 정의
 frontend/              # 입력 CSS·직접 편집하는 JavaScript
     entries/            # 페이지·공통 기능별 JavaScript 진입 파일
 docs/guides/            # 검토자를 위한 기능 검증·운영 설명

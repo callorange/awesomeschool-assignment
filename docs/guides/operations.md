@@ -99,6 +99,7 @@ Q2는 기본 큐 하나와 qcluster 하나를 사용하고 worker 2개가 메일
 | retry_wait | 확정 미접수 일시 오류 또는 공유 예산 대기, next_retry_at 이후 대상 |
 | failed | 확정 실패·설정 문제·시도 한도 초과, 자동 무한 재시도 없음 |
 | unknown | 접수 여부 불명, 증거 없이 자동 재발송·성공 판정하지 않음 |
+| suppressed | 완료·취소로 미처리 안내 중단, 상담을 재개해도 자동 발송 재개 없음 |
 
 동일 안내의 처리권을 row lock으로 확보하고 외부 전송 전에 commit합니다. 결과는 현재 attempt_id·예상 상태가 일치할 때 안내·시도 기록에 함께 반영합니다. accepted·simulated를 늦은 실패로 덮어쓰지 않으며 unknown은 같은 시도의 늦은 성공 응답·MessageId가 있을 때만 accepted로 복구합니다. 결과 저장 DB 장애는 sending을 남겨 이후 unknown으로 보존합니다.
 
@@ -125,7 +126,7 @@ uv run --no-sync python src/manage.py notification_status --settings=config.sett
 
 ## 이미지·초기 데이터
 
-`seed_educations`는 `presets/education/`의 JSON·이미지를 사전 검증하고 없는 교육만 추가합니다. 기존 운영 정보·이미지는 보존합니다. 원본 폴더는 배포물에도 포함해야 하며 일반 static이나 실행 중 업로드 파일로 사용하지 않습니다.
+옵션 없는 `seed_educations`는 `presets/education/`의 교육 JSON·이미지를 사전 검증하고 없는 교육만 추가합니다. 기존 운영 정보·이미지는 보존합니다. 개발 환경에서 신청·상담·모의 메일 사례도 준비하려면 [개발용 신청 샘플](#개발용-신청-샘플)의 선택 옵션과 기존 staff를 지정합니다. 원본 폴더는 배포물에도 포함해야 하며 일반 static이나 실행 중 업로드 파일로 사용하지 않습니다.
 
 이미지는 교육별 고정 UUIDv7 media_id 폴더에 저장합니다. 프리셋 파일은 내용 SHA256을 파일명으로 사용해 실패 후 남은 파일을 재사용하고 일반 업로드는 UUID 파일명을 사용합니다. slug 변경·초기화 재실행으로 기존 키를 이동하지 않으며 로컬·S3의 덮어쓰기를 허용하지 않습니다.
 

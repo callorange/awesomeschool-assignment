@@ -1,6 +1,7 @@
 from uuid import uuid7
 
-from django.db import models
+from django.db import models, router, transaction
+from django.utils import timezone
 
 from .media import education_image_upload_to
 from .validators import validate_curriculum, validate_text_list
@@ -13,7 +14,7 @@ class Education(models.Model):
     lessons(교시 목록)으로 구성하며, 각 교시는 period·topic·activity·description을
     가진다. full_clean()과 이를 호출하는 프리셋 명령이 JSON 구조를 검증한다.
     save()·QuerySet.update()는 입력 검증을 자동 실행하지 않는다.
-    운영 방식과 상담 접수 상태는 향후 신청 입력에서 사용할 값이며,
+    운영 방식과 상담 접수 상태는 신청 입력에서 사용할 값이며,
     접수 중단 상태도 교육 소개는 공개한다. 진행 안내는 일반 텍스트다.
     image는 저장소 상대 이름으로 보관하고 실제 제공 URL은 선택한 Storage가 만든다.
     media_id는 저장 전에 생성하는 UUIDv7이며 slug와 무관한 고정 이미지 폴더다.
@@ -107,3 +108,293 @@ class Education(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        """이미지 교체와 post_save의 ORM 큐 등록이 함께 commit되게 한다."""
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            return super().save(*args, **kwargs)
+
+
+class Application(models.Model):
+    """교육 삭제 후에도 신청 당시 상담 내용과 제출 식별자를 보존한다.
+
+    education_slug·education_title은 신청 시점의 snapshot이다. 같은 request_id의
+    재요청은 현재 교육 정보 대신 저장된 입력과 비교하며 새 신청을 만들지 않는다.
+    안내의 발송 상태는 notification에서 관리하고 신청 상태와 구분한다.
+    """
+
+    class Status(models.TextChoices):
+        RECEIVED = "received", "접수"
+
+    education = models.ForeignKey(
+        Education,
+        verbose_name="신청 교육",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="applications",
+        help_text="원본 교육입니다. 교육 삭제 후에도 신청은 남으며 이 참조만 비워집니다.",
+    )
+    education_slug = models.SlugField(
+        "신청 당시 교육 URL 식별자",
+        help_text="신청 당시 slug입니다. 교육 변경·삭제 후에도 동일 제출 확인에 사용합니다.",
+    )
+    education_title = models.CharField(
+        "신청 당시 교육명",
+        max_length=100,
+        help_text="신청 당시 교육명입니다. 이후 교육 정보와 무관하게 안내 메일에 사용합니다.",
+    )
+    request_id = models.UUIDField(
+        "제출 식별자",
+        unique=True,
+        help_text="클라이언트가 생성한 UUID입니다. 같은 식별자·입력의 재요청은 기존 접수를 반환합니다.",
+    )
+    name = models.CharField(
+        "신청자 이름",
+        max_length=100,
+        help_text="상담 신청자 이름이며 안내 메일의 인사말에 사용합니다.",
+    )
+    email = models.EmailField(
+        "이메일", max_length=254, help_text="상담 안내 메일을 받을 이메일 주소입니다."
+    )
+    postal_code = models.CharField(
+        "우편번호",
+        max_length=5,
+        help_text="주소 검색 또는 직접 입력한 숫자 5자리 우편번호입니다.",
+    )
+    address = models.CharField(
+        "기본주소",
+        max_length=255,
+        help_text="주소 검색으로 선택하거나 직접 입력한 기본주소입니다.",
+    )
+    address_detail = models.CharField(
+        "상세주소",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="동·호수 등 추가 주소입니다. 입력하지 않으면 빈 문자열로 저장합니다.",
+    )
+    contact_date = models.DateField(
+        "연락 가능 날짜",
+        help_text="한국 날짜 기준 상담 연락이 가능한 날입니다. 교육 일정이나 연락 시각을 확정하지 않습니다.",
+    )
+    status = models.CharField(
+        "신청 상태",
+        max_length=20,
+        choices=Status,
+        default=Status.RECEIVED,
+        help_text="신규 신청은 접수로 저장합니다. 자동 안내 메일의 처리 상태와는 별개입니다.",
+    )
+    created_at = models.DateTimeField(
+        "신청 일시",
+        default=timezone.now,
+        editable=False,
+        help_text="신청 생성 시각입니다. 연락 가능 날짜의 09시가 지난 신청은 이 시각부터 안내 대상입니다.",
+    )
+
+    class Meta:
+        verbose_name = "교육 신청"
+        verbose_name_plural = "교육 신청"
+
+
+class ApplicationNotification(models.Model):
+    """큐 재전달과 실제 메일 전송 시도를 구분하는 신청별 영속 처리 기록이다.
+
+    신청과 같은 transaction에 pending·시도 0으로 생성한다. worker는 처리권과
+    시도 기록을 commit한 뒤 전송하며 accepted·simulated는 재전송하지 않는다.
+    unknown은 미발송을 뜻하지 않으므로 시간 경과만으로 재시도하지 않는다.
+    """
+
+    class State(models.TextChoices):
+        PENDING = "pending", "발송 대기"
+        QUEUED = "queued", "큐 대기"
+        SENDING = "sending", "발송 시도 중"
+        ACCEPTED = "accepted", "SES 접수"
+        SIMULATED = "simulated", "모의 완료"
+        RETRY_WAIT = "retry_wait", "재시도 대기"
+        FAILED = "failed", "실패"
+        UNKNOWN = "unknown", "결과 확인 필요"
+
+    class Mode(models.TextChoices):
+        SIMULATED = "simulated", "개발 모의 처리"
+        SES = "ses", "운영 SES"
+
+    application = models.OneToOneField(
+        Application,
+        verbose_name="교육 신청",
+        on_delete=models.CASCADE,
+        related_name="notification",
+        help_text="신청마다 하나만 생성하는 자동 안내입니다. 신청 삭제 시 함께 삭제됩니다.",
+    )
+    due_at = models.DateTimeField(
+        "안내 대상 시작 일시",
+        help_text="연락 가능 날짜의 한국 시각 09시와 신청 일시 중 늦은 값입니다. 실제 발송 시각은 아닙니다.",
+    )
+    mode = models.CharField(
+        "전송 모드",
+        max_length=10,
+        choices=Mode,
+        help_text="생성 당시의 개발 모의 처리 또는 운영 SES 모드입니다. 환경이 달라지면 전송하지 않습니다.",
+    )
+    state = models.CharField(
+        "안내 처리 상태",
+        max_length=20,
+        choices=State,
+        default=State.PENDING,
+        help_text="미시도는 pending입니다. accepted는 SES 접수이며 수신함 도착을 보장하지 않습니다.",
+    )
+    queued_at = models.DateTimeField(
+        "큐 등록 일시",
+        null=True,
+        blank=True,
+        help_text="현재 작업의 큐 등록 시각입니다. 오래된 미시도 작업 복구에 사용하고 처리권 확보 시 비웁니다.",
+    )
+    next_retry_at = models.DateTimeField(
+        "다음 처리 허용 일시",
+        null=True,
+        blank=True,
+        help_text="재시도 또는 공유 전송 예산 대기의 최소 허용 시각입니다. 다음 검사·큐 대기로 지연될 수 있습니다.",
+    )
+    attempt_count = models.PositiveSmallIntegerField(
+        "전송 시도 횟수",
+        default=0,
+        help_text="처리권을 확보한 전송 시도 수이며 최대 3회입니다. 큐 재전달·예산 대기는 증가시키지 않습니다.",
+    )
+    attempt_id = models.UUIDField(
+        "현재 전송 시도 식별자",
+        null=True,
+        blank=True,
+        help_text="현재 MailAttempt의 UUID입니다. 시도 전에는 비어 있고 이전 시도의 결과 갱신을 막습니다.",
+    )
+    started_at = models.DateTimeField(
+        "현재 전송 시도 시작 일시",
+        null=True,
+        blank=True,
+        help_text="현재 처리권을 확보한 시각입니다. 오래된 sending을 unknown으로 복구하는 기준입니다.",
+    )
+    simulated_at = models.DateTimeField(
+        "모의 처리 완료 일시",
+        null=True,
+        blank=True,
+        help_text="개발 locmem 처리 완료 시각입니다. 외부 발송이나 SES 접수를 의미하지 않습니다.",
+    )
+    sent_at = models.DateTimeField(
+        "SES 접수 확인 일시",
+        null=True,
+        blank=True,
+        help_text="SES 접수 성공을 기록한 시각입니다. 미시도·모의 처리·결과 불명은 비워 두며 실제 전달 시각은 아닙니다.",
+    )
+    ses_message_id = models.CharField(
+        "SES 메시지 식별자",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="SES 접수 성공 응답의 MessageId입니다. 미접수·모의 처리·결과 불명에는 비워 둡니다.",
+    )
+    error_code = models.CharField(
+        "안전한 오류 코드",
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="분류된 오류 코드만 저장합니다. 수신자·본문·provider 예외 원문은 기록하지 않습니다.",
+    )
+
+    class Meta:
+        verbose_name = "신청 자동 안내"
+        verbose_name_plural = "신청 자동 안내"
+        indexes = [
+            models.Index(fields=["state", "due_at"], name="notification_due_idx"),
+            models.Index(
+                fields=["state", "next_retry_at"], name="notification_retry_idx"
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(attempt_count__lte=3),
+                name="notification_max_attempts",
+            )
+        ]
+
+
+class MailAttempt(models.Model):
+    """처리권 확보와 함께 생성하는 개별 시도의 결과를 보존한다.
+
+    재시도마다 새 UUID를 만들고 notification의 현재 attempt_id와 대조한다.
+    전송 후에는 안내와 시도 결과를 같은 transaction에서 갱신한다.
+    """
+
+    id = models.UUIDField(
+        "전송 시도 식별자",
+        primary_key=True,
+        default=uuid7,
+        editable=False,
+        help_text="처리권 확보 시 생성하는 UUIDv7입니다. 하나의 전송 시도와 그 결과를 연결합니다.",
+    )
+    notification = models.ForeignKey(
+        ApplicationNotification,
+        verbose_name="신청 자동 안내",
+        on_delete=models.CASCADE,
+        related_name="attempts",
+        help_text="이 시도가 속한 안내입니다. 재시도 이력도 같은 안내에 연결합니다.",
+    )
+    started_at = models.DateTimeField(
+        "시도 시작 일시",
+        default=timezone.now,
+        help_text="외부 전송 전에 처리권과 시도 기록을 생성한 시각입니다.",
+    )
+    finished_at = models.DateTimeField(
+        "시도 결과 기록 일시",
+        null=True,
+        blank=True,
+        help_text="결과 또는 중단 복구를 기록한 시각입니다. 처리 중이면 비어 있습니다.",
+    )
+    state = models.CharField(
+        "시도 처리 상태",
+        max_length=20,
+        choices=ApplicationNotification.State,
+        default=ApplicationNotification.State.SENDING,
+        help_text="개별 시도의 처리 결과입니다. unknown은 실제 접수 여부를 확정할 수 없다는 뜻입니다.",
+    )
+    ses_message_id = models.CharField(
+        "SES 메시지 식별자",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="이 시도의 SES 접수 성공 응답에서 확인한 MessageId입니다. 모의 처리에는 없습니다.",
+    )
+    error_code = models.CharField(
+        "안전한 오류 코드",
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="이 시도의 분류된 오류 코드입니다. 개인정보나 외부 예외 원문은 저장하지 않습니다.",
+    )
+
+    class Meta:
+        verbose_name = "메일 전송 시도"
+        verbose_name_plural = "메일 전송 시도"
+
+
+class MailSendBudget(models.Model):
+    """여러 worker가 짧은 row lock으로 공유하는 SES 전송 허용 시각이다."""
+
+    id = models.PositiveSmallIntegerField(
+        "공유 예산 식별자",
+        primary_key=True,
+        default=1,
+        help_text="항상 1인 단일 공유 예산입니다. 이 DB를 사용하는 worker가 같은 SES 속도 한도를 공유합니다.",
+    )
+    next_allowed_at = models.DateTimeField(
+        "다음 전송 허용 일시",
+        default=timezone.now,
+        help_text="공유 속도 한도로 예약한 다음 전송 가능 시각입니다. 일일 잔여 발송량은 나타내지 않습니다.",
+    )
+
+    class Meta:
+        verbose_name = "메일 공유 전송 예산"
+        verbose_name_plural = "메일 공유 전송 예산"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(id=1), name="mail_budget_singleton"
+            )
+        ]

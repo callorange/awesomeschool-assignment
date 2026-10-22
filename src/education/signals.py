@@ -1,49 +1,33 @@
-"""교육 삭제·이미지 교체가 commit된 뒤 미참조 파일만 정리한다."""
+"""교육 변경과 동일 transaction에 미참조 이미지 정리 후보를 영속 등록한다."""
 
-import logging
-
-from django.db import transaction
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
+from django_q.tasks import async_task
 
 from .models import Education
 
-logger = logging.getLogger(__name__)
 
-
-def _queue_image_cleanup(name, storage, using):
-    """지정한 DB의 commit 이후 미참조 파일 정리를 예약한다.
-
-    활성 transaction이 없으면 즉시 실행하며 rollback되면 실행하지 않는다.
-    빈 키는 무시하고 실행 시 참조를 다시 확인해 공유·재연결된 파일을 보존한다.
-    조회나 삭제 실패는 로그만 남기며 이미 commit된 DB 변경은 되돌리지 않는다.
-
-    Args:
-        name: 삭제 후보인 이전 파일의 저장소 상대 키.
-        storage: 해당 파일이 속한 Storage 객체.
-        using: 참조 조회와 on_commit 등록에 사용할 DB alias.
-    """
+def _queue_image_cleanup(name, using):
+    """같은 DB의 ORM broker에 키를 기록하고 등록 실패는 교육 변경도 rollback한다."""
     if not name:
         return
-
-    def cleanup():
-        """commit 시점의 참조를 확인해 미참조 파일만 삭제하고 실패를 기록한다."""
-        try:
-            if not Education.objects.using(using).filter(image=name).exists():
-                storage.delete(name)
-        except Exception as error:
-            # 저장소 예외 본문에는 접속 정보가 포함될 수 있어 종류만 기록한다.
-            logger.error(
-                "교육 이미지 정리 실패: key=%s, error=%s", name, type(error).__name__
-            )
-
-    transaction.on_commit(cleanup, using=using, robust=True)
+    if settings.Q_CLUSTER["orm"] != using:
+        raise ImproperlyConfigured("이미지 변경 DB와 Q2 ORM broker DB가 같아야 합니다.")
+    async_task(
+        "education.tasks.delete_unreferenced_education_image",
+        name,
+        "default",
+        using,
+        ack_failure=False,
+    )
 
 
 @receiver(post_delete, sender=Education)
 def cleanup_deleted_education_image(sender, instance, using, **kwargs):
-    """단일·일괄 삭제된 교육의 이미지 정리를 DB commit 이후로 예약한다."""
-    _queue_image_cleanup(instance.image.name, instance.image.storage, using)
+    """Django 삭제 transaction 안에 파일 키를 등록한다. 실행 시 참조를 다시 검사한다."""
+    _queue_image_cleanup(instance.image.name, using)
 
 
 @receiver(pre_save, sender=Education)
@@ -71,7 +55,7 @@ def remember_previous_image(sender, instance, using, raw, update_fields, **kwarg
 
 @receiver(post_save, sender=Education)
 def cleanup_replaced_education_image(sender, instance, using, raw, **kwargs):
-    """저장된 실제 키가 바뀌면 이전 파일만 commit 이후 정리하도록 예약한다.
+    """저장된 실제 키가 바뀌면 Education.save transaction 안에 이전 키를 등록한다.
 
     새 파일이나 동일 키는 정리하지 않으며 raw fixture 저장은 건너뛴다.
     이전 키는 pre_save에서 수집하므로 이를 우회하는 bulk 수정은 처리하지 않는다.
@@ -80,4 +64,4 @@ def cleanup_replaced_education_image(sender, instance, using, raw, **kwargs):
         return
     previous = getattr(instance, "_previous_image_name", None)
     if previous and previous != instance.image.name:
-        _queue_image_cleanup(previous, instance.image.storage, using)
+        _queue_image_cleanup(previous, using)

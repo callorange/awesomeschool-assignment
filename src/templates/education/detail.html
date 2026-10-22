@@ -24,6 +24,7 @@
       {% if education.is_accepting_inquiries %}
         <p class="mt-4 font-semibold">상담 접수 가능</p>
         <p class="mt-2 text-sm leading-7 text-ink/75">교육 신청은 상담 접수 단계이며, 수강이나 교육 일정의 확정을 의미하지 않습니다.</p>
+        <a href="{% url 'education:application' education.slug %}" class="mt-5 inline-flex min-h-12 items-center rounded-full bg-ink px-6 py-3 font-semibold text-white hover:bg-ink/90">교육 상담 신청하기 <span aria-hidden="true" class="ml-4">↗</span></a>
       {% else %}
         <p class="mt-4 font-semibold">상담 접수 중단</p>
         <p class="mt-2 text-sm leading-7 text-ink/75">현재 이 교육의 신규 상담 접수를 받지 않습니다.</p>

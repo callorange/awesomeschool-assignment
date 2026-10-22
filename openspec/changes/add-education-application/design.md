@@ -26,7 +26,7 @@
 
 ### 1. 같은 앱의 모델과 명시적 공개 API
 
-`education/models.py`에 Application과 ApplicationNotification을 추가한다. 단순 CRUD를 위해 Service·Repository 앱을 만들지 않는다. API는 `education/api.py`, serializer는 `education/serializers.py`, 작업은 `education/tasks.py`, SES 연계는 `education/notifications.py`에서 담당한다. 같은 책임이 비대해지지 않는 한 파일을 더 잘게 나누지 않는다.
+`education/models.py`에 Application과 ApplicationNotification을 추가한다. 단순 CRUD를 위해 Service·Repository 앱을 만들지 않는다. API는 `education/api.py`, serializer는 `education/serializers.py`, Q2 task 진입점은 `education/tasks.py`에 둔다. 긴 task의 내부 처리는 10절의 `education/tasks_support/`로 분리하고 기존 `education/notifications.py`의 메일 생성·SES 오류 분류를 상담 안내 이메일 전송 지원 모듈에 통합한다. 짧은 처리를 파일이나 한 줄 위임 함수로 기계적으로 분리하지 않는다.
 
 Application은 교육 FK, 신청 당시 교육 slug·교육명 snapshot, 이름(100자)·이메일(254자)·우편번호(5자리 문자열)·기본주소(255자)·상세주소(255자, 선택)·연락 가능 날짜, 고유한 request_id(UUID), 서버 기본 상태 `received`/표시 `접수`, 생성 시각을 보관한다. 문자열 입력은 바깥 공백만 제거하고 이메일 대소문자·주소 내용을 자의적으로 변경하지 않는다. 상세주소 생략은 빈 문자열로 정규화하고 UUID·날짜는 파싱한 값으로 비교한다. 연락 가능 날짜는 `timezone.localdate()` 기준 오늘을 포함해 허용한다. 전화번호·일정 확정·주소 진위 인증은 추가하지 않는다.
 
@@ -189,6 +189,40 @@ Q2 설치 후 기존 관리자 앱의 콘텐츠 수 등 테스트 가정을 확�
 
 공통 설정·모델·템플릿 변경을 포함하므로 README의 Django check·migration 누락·education tests·Ruff를 수행하고 CSS를 재빌드한다. API·Q2·메일·이미지 동작을 좁게 검사한 뒤 전체 검사로 확장한다. 실제 AWS와 실제 수신은 별도 opt-in이며 기본 테스트의 필수 조건이 아니다. 기본 주소 검색 계약은 fake callback으로 검사하고 공식 서비스와 모바일 기기의 수동 연결 검증은 별도로 기록한다.
 
+### 10. task 명칭과 긴 함수의 내부 처리 분리
+
+task 이름은 전달 수단과 업무 목적을 함께 표현한다. 이 change의 메일은 접수 직후 보내는 확인 메일이 아니라 연락 가능 날짜를 다시 안내하는 상담 안내 이메일이며 `consultation_reminder`로 구분한다. 공개 Q2 진입점은 다음으로 변경하고 함수 인자·반환·실패 정책은 유지한다.
+
+| 기존 함수 | 변경 함수 |
+| --- | --- |
+| `dispatch_notifications` | `enqueue_consultation_reminder_emails` |
+| `send_notification` | `send_consultation_reminder_email` |
+| `cleanup_image` | `delete_unreferenced_education_image` |
+
+```text
+education/
+    tasks.py
+    tasks_support/
+        __init__.py
+        consultation_reminder_dispatch.py
+        consultation_reminder_delivery.py
+        exceptions.py
+```
+
+`tasks.py`에는 세 task 함수와 그 실행 흐름을 둔다. 대상 검사 task는 복구·배치 등록·후속 검사 등록 순서, 전송 task는 처리권 확보·메일 전송·결과 기록 순서를 드러낸다. `tasks_support/`는 긴 task를 읽기 어렵게 하는 내부 처리를 분리하는 용도로만 사용하며 범용 util·Service 계층이나 모든 task의 대응 파일을 만들지 않는다. 짧은 이미지 참조 검사·삭제 처리는 task 안에 유지한다.
+
+`consultation_reminder_dispatch.py`는 오래된 작업 복구·대상 잠금·배치 등록과 관련 한도를 담당한다. `consultation_reminder_delivery.py`는 전송 처리권·공유 예산 확보·결과 저장, 기존 `notifications.py`의 메일 생성·SES 오류/반환값 분류를 담당한다. 메일 생성 전용 파일을 미리 추가하지 않는다. 메일·이미지 task에서 사용하는 `SafeTaskError`만 `exceptions.py`에서 공유하고 `__init__.py`에 실행 부작용이나 암묵적 재노출을 넣지 않는다. 지원 모듈은 task 모듈을 역으로 import하지 않는다.
+
+잠금·transaction·상태 전이를 책임지는 처리는 독립 함수로 유지한다. 짧은 대입·단순 위임은 사용 위치에 두며 기존 `_eligible`의 짧은 QuerySet 조합은 대상 선택·후속 검사 판정 위치에 인라인한다. 두 위치에서 due_at·pending/retry_wait·next_retry_at 조건이 어긋나지 않는지 기존 시각 경계·재시도·후속 검사 테스트로 검증한다. task에서 호출하는 지원 함수는 책임이 드러나는 이름을 사용하고, 지원 모듈 안에서만 호출하는 함수는 private으로 유지한다.
+
+이번 정리는 함수·모듈 이름과 배치만 변경한다. ApplicationNotification·MailAttempt 등 기존 모델명, DB 필드·제약·migration, template·사용자 문구·API 계약은 바꾸지 않는다. 등록 transaction·외부 호출 전 처리권 commit·결과 원자성·총 시도 횟수·unknown 보호·이미지 참조 재검사를 보존한다.
+
+Q2의 dotted path는 영속 데이터의 일부이므로 코드의 import만 바꾸고 끝내지 않는다. `async_task`의 메일·후속 검사·이미지 등록 문자열과 `configure_background_tasks`의 함수 경로를 새 `education.tasks.*`로 함께 변경한다. 기존 스케줄 이름 `education-notifications`와 row를 재사용하며 다음 실행 시각은 유지한다. 준비 명령 재실행으로 기존 함수 경로가 교체되고 중복 스케줄이 생기지 않는지 실제 DB 테스트로 확인한다. 기존 명령의 5분 간격·반복 횟수·cluster 갱신 정책은 유지한다.
+
+실제 환경에 적용하기 전 기존 경로의 대기·실행 중 작업 유무를 확인한다. 남아 있으면 신규 등록을 잠시 멈추고 기존 코드의 worker로 정상 처리·결과 저장 후 정상 종료한 뒤 전환한다. 임의로 서명된 큐 payload를 편집하거나 작업·발송 기록을 지우지 않는다. 정리 없이 옛 경로 작업을 남긴 채 새 worker를 시작하지 않으며 상시 호환 alias·범용 큐 변환기는 추가하지 않는다. 과거 성공·실패 이력은 보존하고 과거 이미지 실패를 수동 재등록할 때는 새 함수 경로와 기존 인자를 사용하도록 문서화한다. 메일 실패·unknown은 이름 변경을 이유로 재발송하지 않는다.
+
+관련 테스트의 import·patch 위치는 이동한 구현에 맞추되 실제 DB·내부 상태 전이를 mock하지 않는다. 새 경로를 넣은 실제 Q2 payload·스케줄·subprocess 실행으로 이름 해석과 기존 정상 종료·복구 동작을 확인한다. README·architecture·관련 운영 설명과 docstring을 구현과 함께 동기화한다. 화면·자산을 변경하지 않으므로 이 정리만을 이유로 CSS 빌드나 브라우저 검증을 반복하지 않는다.
+
 ## Risks / Trade-offs
 
 - [SES 외부 발송의 원자성 부재] → 고유 대상·원자적 claim·시도 기록으로 중복을 제어하되 exactly-once 수신을 보장하지 않는다. 응답 유실 시 중복 방지를 우선해 unknown을 자동 재발송하지 않으므로 실제 미발송일 가능성을 자동 해소할 수 없다. 미처리 대상을 보존하는 누락 방지와 실제 수신 보장은 구분한다.
@@ -199,6 +233,7 @@ Q2 설치 후 기존 관리자 앱의 콘텐츠 수 등 테스트 가정을 확�
 - [신청 개인정보와 외부 주소 검색] → 공개 GET은 교육정보만, 성공 POST는 최소 접수 결과만 반환한다. 외부 서비스에 불필요한 입력을 전송하지 않고 SDK 예외·Q2 기록에 민감값을 노출하지 않는다.
 - [브라우저 응답 유실] → 같은 request_id·입력은 기존 접수 결과를 재사용한다. 별도의 새 식별자로 반복한 신청을 이메일만으로 차단하지는 않는다.
 - [의존성·환경별 차이] → Python 3.14/Django 6.1과 Q2 1.11 조합을 lock하고 실제 subprocess·개발/운영 격리 테스트로 확인한다. 현재 비교 문서의 기능 지원을 실행 검증으로 대신하지 않는다.
+- [task 이름과 영속 큐 경로의 불일치] → 기존 경로의 대기·실행 작업을 확인하고 기존 코드로 정상 처리한 뒤 새 코드·스케줄로 전환한다. 기록 삭제·큐 payload 직접 편집·메일 재발송으로 이름 변경을 해결하지 않는다.
 
 ## Migration Plan
 
@@ -208,3 +243,4 @@ Q2 설치 후 기존 관리자 앱의 콘텐츠 수 등 테스트 가정을 확�
 4. 운영자는 SES verified identity·발송 권한이 있는 IAM role·rate quota와 django-ses backend 설정을 준비한 뒤 prod worker를 실행한다. SNS·웹훅·이벤트 인프라는 요구하지 않는다. 자원 생성·실발송은 별도 요청에서만 한다.
 5. 운영 배포 시 이전 worker를 정상 종료하고 결과 flush를 확인한 뒤 새 코드·같은 미디어 설정의 worker를 시작한다. 유예 시간은 내부 대기까지 포함하며 서비스 관리자 설정과 함께 검증한다.
 6. rollback 시 신규 신청 접수·스케줄을 먼저 중단하고 worker를 정상 종료한다. 보존된 신청·attempt·실패 기록과 대기 작업이 새 코드에 의존하므로 무조건 다운 migration하거나 옛 코드로 큐를 실행하지 않는다. 별도 검토로 재시작·복구하며 데이터를 삭제하는 rollback은 이번 자동 절차에 포함하지 않는다.
+7. task 구조 정리는 새 schema migration 없이 적용한다. 10절에 따라 기존 경로 작업을 처리·정상 종료하고 새 코드를 배치한 뒤 `configure_background_tasks`로 같은 스케줄 row의 함수 경로를 갱신한다. 새 경로의 작업 등록·실행과 기존 발송·이미지 보호를 테스트 DB에서 검증한 후 worker를 시작한다. 전환 중 작업·신청·시도 기록을 초기화하지 않는다.

@@ -79,7 +79,7 @@ Celery도 정확히 한 번 실행을 자동 보장하지 않는다. 예외에 �
 
 메일의 `sent_at` 확인만으로는 동시 worker가 모두 미발송으로 판단하는 상황을 막지 못한다. 고유 발송 기록과 원자적인 처리권 확보가 필요하다. SES가 접수한 뒤 응답 유실·DB 기록 전 종료가 발생하면 실제 발송 여부가 불명확해진다. SES SendEmail에는 idempotency token 인자가 없어 단순 재시도로 중복·누락을 동시에 제거할 수 없다. SES 접수 성공도 수신함 도착을 의미하지 않는다.
 
-오류별 재시도는 실패 결과 문자열을 파싱하기보다 발송 기록의 구조화된 오류 코드로 판단한다. 명확한 미접수 일시 오류만 제한적으로 재시도하고 접수 여부 불명은 확인 필요로 보존하며 자동 재발송하지 않는 것으로 계획했다. SNS·웹훅을 통한 추가 결과 대조와 반송 확인은 후속 범위다. 실제 발송 처리는 아직 구현하지 않았다.
+오류별 재시도는 실패 결과 문자열을 파싱하기보다 발송 기록의 구조화된 오류 코드로 판단한다. 명확한 미접수 일시 오류만 제한적으로 재시도하고 접수 여부 불명은 확인 필요로 보존하며 자동 재발송하지 않는다. SNS·웹훅을 통한 추가 결과 대조와 반송 확인은 후속 범위다. Django 이메일 API·환경별 backend·상태 전이는 구현했으며 실제 AWS 발송은 검증하지 않았다.
 
 근거: [Q2 retry·ACK 설정](https://django-q2.readthedocs.io/en/master/configure.html#retry), [작업별 ack_failure](https://django-q2.readthedocs.io/en/master/tasks.html#ack-failure), [Celery 작업 ACK·retry](https://docs.celeryq.dev/en/stable/userguide/tasks.html), [SES SendEmail](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html).
 
@@ -93,7 +93,7 @@ Celery는 `SIGTERM`으로 실행 중인 작업을 기다리는 warm shutdown을 
 
 근거: [Q2 종료 절차](https://django-q2.readthedocs.io/en/master/architecture.html#stop-procedure), [Celery 종료](https://docs.celeryq.dev/en/stable/userguide/workers.html#stopping-the-worker), [Celery 재시작](https://docs.celeryq.dev/en/stable/userguide/workers.html#restarting-the-worker), [Celery Windows 지원](https://docs.celeryq.dev/en/stable/faq.html#does-celery-support-windows), [Q2 timeout](https://django-q2.readthedocs.io/en/master/configure.html#timeout).
 
-## 이 프로젝트의 선택과 구현 전 확인 사항
+## 이 프로젝트의 선택과 검증 범위
 
 확정한 선택:
 
@@ -105,8 +105,10 @@ Celery는 `SIGTERM`으로 실행 중인 작업을 기다리는 warm shutdown을 
 - 별도 DLQ는 보류하고 Q2의 실패 작업 확인·재등록 기능을 활용한다. 이 기능은 전용 broker DLQ와 구분한다.
 - 신청 관리 CRUD는 후속 범위이며 이번에는 접수 상태 저장·표시만 다룬다.
 
-worker 2개, 메일의 상태 기록에 따른 선별 재등록, 이미지의 제한적 자동 재시도를 초기 구성으로 계획했다. 구체적인 timeout·retry·재시도 횟수·발송 시각·SES 공유 속도 제한과 결과 불명 정책은 [교육 신청 설계](../openspec/changes/add-education-application/design.md)를 따른다. 이 값은 구현·운영 검증 완료를 뜻하지 않는다.
+worker 2개·timeout 60초·broker retry 300초·작은 내부 대기량으로 구성했다. 메일은 발송 기록으로 일반 일시 오류 5분/15분·일일 한도 24시간 대기·총 3회 제한을 적용하고 결과 불명은 재전송하지 않는다. 이미지는 작업별 ack_failure=False와 max_attempts=3을 사용한다. Django 이메일 API의 dev locmem/prod django-ses 선택·공유 전송 예산·실행 명령과 운영 전제는 [운영 가이드](guides/operations.md#백그라운드-worker와-자동-안내)를 따른다.
 
-발송 대상·이미지 삭제 후보가 큐 등록 전에 사라지지 않도록 DB 변경과 작업 등록의 일관성 및 복구 경로를 검증해야 한다. Q2 실패 목록은 이미 실행되어 실패한 작업의 기록이며 등록되지 않은 작업을 복구해 주지는 않는다. 이미지 작업은 매 실행마다 참조를 다시 확인하고, 메일은 중복 실행 시 외부 전송을 반복하지 않도록 설계한다.
+상담 안내 이메일 task는 `enqueue_consultation_reminder_emails`·`send_consultation_reminder_email`, 이미지 task는 `delete_unreferenced_education_image`다. Q2는 함수 경로를 스케줄·큐에 저장하므로 함수 이름 변경 시 코드와 영속 경로를 함께 전환해야 한다. 기존 큐를 기존 worker로 처리·정상 종료한 뒤 새 코드와 스케줄을 적용하는 절차와 과거 이미지 실패 재등록 방법은 [기존 task 경로 전환](guides/operations.md#기존-task-경로-전환)을 따른다.
 
-현재 패키지 설치·실제 worker·동시 실행·정상 종료·장애 복구·SES 전송은 검증하지 않았다. 공식 문서상의 기능 지원과 이 프로젝트의 구현 완료를 구분한다. 실제 운영 한도는 [SES 발송 한도](https://docs.aws.amazon.com/ses/latest/dg/manage-sending-quotas.html)를 따른다.
+신청·안내의 원자적 저장과 이미지 변경·ORM 큐의 같은 transaction 기록을 실제 PostgreSQL에서 검증했다. Q2 실패 목록은 등록되지 않은 작업을 복구하지 않으므로 메일은 영속 대상에서 재발견하고 이미지 큐 등록 실패는 DB 변경도 rollback한다. 이미지 작업의 참조 재검사와 메일의 원자적 처리권을 동시 실행·중복 작업으로 확인했다.
+
+Windows에서 실제 qcluster subprocess의 run-once 정상 종료·결과 flush, 프로세스 트리 강제 종료 후 queued 복구/sending의 unknown 보존, 이미지 실패 후 재등록을 검증했다. 운영 SES는 실제 django-ses backend와 fake SDK로 검증하며 실제 AWS 연결·수신·Linux 서비스 관리자 종료 신호는 미검증이다. Windows의 강제 종료를 graceful shutdown 성공으로 간주하지 않는다. 실제 운영 한도는 [SES 발송 한도](https://docs.aws.amazon.com/ses/latest/dg/manage-sending-quotas.html)를 따른다.

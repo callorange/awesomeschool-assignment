@@ -1,0 +1,144 @@
+# 기능 검증 가이드
+
+과제 검토자가 [README의 로컬 실행](../../README.md#로컬-실행)을 마친 뒤 기능과 한계를 확인하는 안내입니다. 개발 규칙은 [개발 규약](../development.md)에서 별도로 관리합니다. 명령은 저장소 루트에서 Bash로 실행합니다.
+
+## 화면과 접수 확인
+
+| 확인 순서 | 예상 결과 |
+| --- | --- |
+| 랜딩 → 교육 상세 | 프롬프트·감정탐험·관계 히어로 3개와 목표·대상·커리큘럼·진행 안내가 보입니다. |
+| 상세 → 상담 신청 | 교육정보 API를 읽어 선택 교육·접수 가능 여부를 표시합니다. |
+| 주소 검색·취소·직접 입력 | 우편번호·기본주소를 채우고 상세주소로 이동합니다. 취소·SDK 장애에도 기존 입력을 보존합니다. |
+| 유효한 신청 제출 | 이름·이메일·우편번호·기본주소·연락 가능 날짜를 검증하고 `접수`·식별자를 표시합니다. 상세주소는 선택입니다. |
+| 오류·전송 중 상태 | 필드 오류를 표시하고 첫 오류로 이동하며 전송 중 편집·중복 클릭을 막습니다. |
+| 신청 관리 | 저장과 접수 표시까지 구현했습니다. 관리자 신청 조회·수정·삭제·상태 변경 화면은 없습니다. |
+
+Kakao 공식 SDK는 주소 검색 버튼을 누를 때 외부 HTTPS로 로딩합니다. 연결이 안 되면 직접 입력으로 접수할 수 있습니다. 검색 요청에 신청자 이름·이메일·상세주소를 추가하지 않습니다. Axios·CSS는 로컬 자산입니다.
+
+## 자동 안내 확인
+
+1. README의 `configure_background_tasks`를 실행하고 별도 터미널에서 `qcluster`를 유지합니다.
+2. 오늘 날짜로 신청합니다. 한국 시각 09시 이후 신청은 다음 검사 대상이며, 이전이면 09시까지 기다립니다. 미래 날짜는 그 날짜 09시부터 대상입니다.
+3. `notification_status`에서 안내 상태가 `pending` → `queued` → `sending` → `simulated`로 처리되는지 확인합니다. 중간 상태는 짧아 조회에서 보이지 않을 수 있습니다.
+
+```bash
+uv run python src/manage.py notification_status
+```
+
+검사 간격은 5분이고 큐 대기로 더 늦어질 수 있습니다. locmem 메일 본문은 worker 메모리에만 존재하며 console·실제 수신함에는 출력·전달되지 않습니다. 처리 여부는 DB의 상태·`simulated_at`으로 확인하며 `sent_at`·SES MessageId는 비어 있습니다.
+
+시각을 기다리지 않고 로직을 검증하려면 테스트 DB에서 실행하는 다음 검사를 사용합니다. 날짜 경계·모의 전송·한 번 처리·선별 재시도·unknown 보존을 확인하며 실제 신청 기록을 수정하지 않습니다.
+
+```bash
+uv run python src/manage.py test education.tests.test_api education.tests.test_notifications
+```
+
+선택적으로 superuser를 만든 뒤 `/admin/`의 Q2 스케줄·성공/실패 작업을 확인할 수 있습니다. 스케줄은 admin에서 수정하거나 `repeats=0`으로 중지할 수 있습니다. 준비 명령 재실행은 5분 간격·무제한 반복·default cluster를 다시 적용하지만 기존 다음 실행 시각은 유지합니다. 이미 큐에 들어간 작업은 스케줄 수정·중지로 취소되지 않습니다.
+
+```bash
+uv run python src/manage.py createsuperuser
+```
+
+## API 계약
+
+과제의 GET은 **신청 화면에서 사용할 교육정보 조회**로 해석했습니다. 신청자 개인정보를 공개하는 GET은 제공하지 않습니다.
+
+| Method·경로 | 역할 |
+| --- | --- |
+| `GET /api/educations/<slug>/` | slug·title·summary·image_url·image_alt·operation_type·operation_note·is_accepting_inquiries 반환 |
+| `POST /api/applications/` | JSON 입력 검증, 신청·안내 대상 원자적 생성, 접수 결과 반환 |
+| `GET /api/applications/` | 405. 공개 신청 목록 없음 |
+
+교육정보는 다음처럼 확인할 수 있습니다.
+
+```bash
+curl -i http://127.0.0.1:8000/api/educations/prompt-hero/
+```
+
+신청 POST는 신청 화면이 받은 CSRF cookie와 `X-CSRFToken` header가 필요합니다. 브라우저에서 폼을 제출한 뒤 개발자 도구의 Network에서 요청·응답을 확인하는 것이 기본 검토 경로입니다.
+
+| JSON 입력 | 계약 |
+| --- | --- |
+| `education_slug` | 선택한 교육의 slug |
+| `name`·`email` | 필수, 각각 최대 100자·254자, 이메일 형식 검사 |
+| `postal_code`·`address` | 필수, 숫자 5자리 우편번호·최대 255자 기본주소 |
+| `address_detail` | 선택, 최대 255자, 생략하면 빈 문자열 |
+| `contact_date` | `YYYY-MM-DD`, 한국 날짜 기준 오늘 포함 이후 |
+| `request_id` | 클라이언트가 생성하는 UUID, 같은 제출의 재시도에서 유지 |
+
+최초 생성은 201, 같은 식별자·정규화 입력의 재요청은 200입니다. 두 경우 모두 응답 필드는 `request_id`·`status=received`·`status_display=접수`뿐이며 내부 PK·개인정보는 반환하지 않습니다.
+
+| 오류 | 결과 |
+| --- | --- |
+| 필드 오류·미정의 쓰기 필드·신규 접수 중단 | 400, DRF 필드별 문자열 배열 또는 non_field_errors |
+| 없는 교육 | 404, detail |
+| 익명 요청을 포함한 CSRF 누락·실패 | 403, HTML 응답일 수 있음 |
+| 같은 request_id에 다른 입력 | 409, detail. 새 ID로 자동 재전송하지 않음 |
+
+문자열의 바깥 공백은 제거하되 이메일 대소문자·주소 내용은 자의적으로 변경하지 않습니다. 기존 제출 확인은 신규 접수 조건과 구분하므로 접수 후 날짜 경과·교육 중단·slug 변경·삭제가 있어도 원래 입력·ID로 기존 결과를 확인합니다. 교육 삭제 후 신청은 보존하고 안내에는 신청 당시 교육명·slug snapshot을 사용합니다.
+
+## 응답 유실·주소 검색 장애 재현
+
+고급 수동 검증용 HTTP fixture입니다. 별도 개발 DB에서 사용하며 **폼 제출은 실제 개발 DB에 테스트 신청을 저장**합니다. 실제 API·ORM 경로는 유지하고 응답 경계와 외부 주소 SDK만 대체합니다. 운영 URL에 등록하지 않습니다.
+
+두 터미널을 저장소 루트에서 실행합니다.
+
+```bash
+# 터미널 1: 실제 Django 서버
+uv run python src/manage.py runserver 127.0.0.1:8001 --noreload
+```
+
+```bash
+# 터미널 2: loopback 전용 검증 proxy
+uv run python src/education/tests/ui_proxy.py
+```
+
+브라우저에서 `http://127.0.0.1:8002/educations/prompt-hero/apply/?case=lost-csrf`를 열고 테스트 정보로 제출합니다. 여러 시나리오는 순차 검증하며 같은 시나리오를 처음부터 반복할 때는 proxy를 재시작합니다. `--noreload` 서버는 Python 변경 후 직접 재시작합니다.
+
+| case | 재현·확인 내용 |
+| --- | --- |
+| `normal` | fixture 주소 선택 후 실제 신청 저장·접수 표시 |
+| `lost` | 실제 최초 저장 후 실패 응답. 입력을 잠그고 같은 ID로 재확인해 200 반환 |
+| `lost-csrf` | 저장 후 응답 유실 → 재시도 403 → CSRF 갱신 → 같은 ID 재확인 |
+| `invalid` | 첫 제출의 필드 오류·오류 focus·입력 수정 후 재제출 |
+| `conflict` | 409에서 새 ID 자동 생성·전송 없이 중단 |
+| `get-failure`·`stopped` | 교육 조회 실패·중단 상태에서 신규 제출 비활성화 |
+| `sdk-error` | 주소 SDK 실패 후 기존 입력 유지·직접 입력 |
+| `official` | fixture SDK 대신 실제 Kakao 주소 검색. 외부 연결 필요 |
+
+브라우저의 결과 미확인 요청은 메모리의 원래 payload·ID로만 재시도합니다. 개인정보를 localStorage에 남기지 않으므로 새로고침·탭 종료 후 이전 제출 복구는 지원하지 않습니다. 별도의 새 ID로 만든 신청까지 이메일 주소만으로 차단하지는 않습니다.
+
+## 자동 테스트와 정적 검사
+
+로컬 PostgreSQL은 기본 `test_awesomeschool` DB를 생성·삭제합니다. `POSTGRES_DB`를 바꾸면 테스트 DB 이름도 바뀝니다. 공유·운영 DB 설정으로 실행하지 않습니다. 미디어는 임시 디렉터리에 격리합니다.
+
+```bash
+uv run python src/manage.py check
+uv run python src/manage.py makemigrations --check --dry-run
+uv run python src/manage.py test education
+uv run ruff check .
+uv run ruff format --check .
+```
+
+화면·DB·상태 전이·transaction은 실제 경로로 확인합니다. SES는 실제 django-ses backend를 사용하되 외부 SDK만 fake하고 개발 메일은 실제 locmem으로 검사합니다. qcluster subprocess는 테스트 DB·미디어에서 결과 저장·강제 종료 복구·이미지 실패 후 재등록을 확인합니다.
+
+## 검증 기록과 한계
+
+2026-10-22 Windows 환경에서 확인한 결과입니다. 문서를 Bash 기준으로 작성한 것과 macOS/Linux에서 실제 검증한 것은 구분합니다.
+
+| 항목 | 확인 범위 |
+| --- | --- |
+| 자동 테스트 | 98개 통과. 동시 제출·claim·공유 예산·오류별 재시도·원자적 저장·이미지 참조 보호 |
+| qcluster | 실제 subprocess 4개 테스트: 새 task 경로·후속 검사·run-once 정상 종료/결과 저장·강제 종료 복구·이미지 실패 재등록 |
+| 실제 브라우저 | 교육 GET → 주소 검색/입력 → 신청 POST → 접수 표시, 응답 유실·CSRF·400·409·SDK 장애 |
+| 반응형 | desktop 브라우저 360/390/768/1280px에서 넘침 없음·48px 입력 높이·오류/주소 focus |
+| 배포 자산 | 같은 npm lock으로 재설치·재생성한 CSS·Axios ESM/source map/라이선스 hash 일치, 실제 서버 HTTP 200 |
+| 미검증 | macOS/Linux 전체 실행·Linux 서비스 종료 신호·Android Chrome/iOS Safari 실기기·실제 AWS 발송/수신/S3 삭제 |
+
+SES 접수 여부가 불명확한 `unknown`은 자동 해소하지 못합니다. 중복 방지를 위해 자동 재발송하지 않으므로 실제 미발송일 가능성도 남습니다. 신청 관리 CRUD·관리자 신청 목록·Spreadsheet 내보내기·SNS/웹훅·실제 전달/반송 추적은 미구현입니다.
+
+## 초기 콘텐츠 출처
+
+[프롬프트 히어로](https://hero-school.net/visit/prompt/), [감정탐험 히어로](https://hero-school.net/visit/emotion/), [관계 히어로](https://hero-school.net/visit/relationship/)의 공개 콘텐츠를 사용했습니다. 프로그램명·교시 주제·활동명은 원문을 기준으로 하고 소개·목표·대상·설명은 과제용으로 요약·편집했습니다. 상담 후 일정·조건 협의 등 운영 안내는 과제용 정책입니다.
+
+원문·원본 이미지 URL·수집일·편집 설명은 `presets/education/education_presets.json`에 보관하며 DB나 공개 상세에 노출하지 않습니다. 이미지·원문 권리는 각 권리자에게 있습니다.

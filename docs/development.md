@@ -33,6 +33,7 @@ Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니�
 - CSS·JavaScript만 다시 빌드할 때는 `npm run build:css`·`npm run build:js`, 변경 감시는 각각 `npm run watch:css`·`npm run watch:js`를 사용합니다. 두 감시 명령은 별도 터미널에서 실행합니다. 의존성을 추가할 때 필요한 라이선스 고지를 소스의 legal comment에 보존하고 생성된 JS·공유 chunk에 대응하는 `.LEGAL.txt`를 함께 배포합니다.
 - 로컬·평가 실행은 저장소의 CSS·JS 번들을 사용하며 Node.js·외부 Axios CDN·Tailwind CDN·외부 글꼴을 요구하지 않습니다. Tailwind·esbuild는 개발 도구이고 Axios는 번들에 포함되는 브라우저 의존성입니다. Django 운영 서버에서 npm 설치·실행을 요구하지 않습니다.
 - 랜딩·교육 상세·신청을 360px·390px·768px·1280px에서 확인합니다. 카드 1·2·3열, 본문·커리큘럼·폼 잘림과 가로 스크롤, 이미지 비율, 키보드 포커스와 터치 영역을 검증합니다. 반응형 검증을 HTML 렌더링 테스트로 대체하지 않고 Android Chrome·iOS Safari 실기기 확인 여부를 별도로 기록합니다.
+- JavaScript 소스와 생성 자산은 `.gitattributes`로 LF를 고정합니다. source map에 포함되는 소스의 줄바꿈까지 OS·checkout에 따라 달라지지 않아야 합니다.
 - 빌드 재현성은 같은 lockfile로 CSS·JS·source map·라이선스 고지를 재빌드해 산출물의 hash를 비교합니다. CSS·JS·이미지의 HTTP 200과 브라우저의 신청 동작도 실제 서버에서 확인합니다.
 
 ## 마이그레이션 변경과 이력 정리

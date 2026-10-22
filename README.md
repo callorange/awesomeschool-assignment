@@ -121,6 +121,18 @@ uv run python src/manage.py notification_status
 
 페이지 이동·검색은 GET, 로그인·로그아웃·신청/상담 저장은 일반 POST입니다. 이메일 조회 권한이 있으면 상세의 **상태 새로고침**이 Ajax로 이메일 영역만 갱신하여 작성 중인 입력을 유지합니다. 자동 polling·재발송·task 관리 화면은 제공하지 않습니다. 일반 저장의 세션 만료·CSRF 실패는 저장 없이 안내하며 작성 내용 자동 복구는 지원하지 않습니다. [백오피스 확인 절차](docs/guides/verification.md#백오피스-확인)를 참고하세요.
 
+### 선택: 백오피스 신청 샘플 32건
+
+페이지네이션·검색·상태·재연락·상담·이메일 표시를 확인하려면 **기존 활성 staff 계정을 먼저 준비하고 qcluster를 중지한 개발 DB**에서 실행합니다. `reviewer`는 본인이 준비한 기존 사용자명으로 바꿉니다.
+
+```bash
+uv run python src/manage.py seed_educations --with-applications --staff-user reviewer
+```
+
+교육 3개에 가상 신청 11·11·10건을 추가합니다. 샘플만 있으면 백오피스 첫 페이지 20건·두 번째 12건이고 일반 신청도 있으면 `application-preset-`로 검색해 분리할 수 있습니다. 날짜는 최초 생성 당시 한국 시각 기준이며 재실행해도 날짜·담당자 수정값·상담·메일·이력을 덮어쓰지 않습니다. 옵션 없는 `seed_educations`는 기존 교육·이미지만 준비합니다.
+
+신청 옵션은 dev 설정·모의 메일 환경에서만 허용하며 계정 생성·실제 발송·큐 등록을 하지 않습니다. 샘플 이메일 상태는 화면 확인용 합성 기록으로 SES 접수 증거를 만들지 않습니다. worker 시작 후 상태가 바뀔 수 있으므로 [샘플 확인 순서](docs/guides/verification.md#신청-샘플-확인)대로 먼저 화면을 확인합니다. 환경·보존 계약은 [운영 가이드](docs/guides/operations.md#개발용-신청-샘플)를 참고하세요.
+
 ## 주요 설계 의도
 
 ```mermaid
@@ -182,7 +194,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-2026-10-22 Windows에서 **141개 테스트**를 통과했습니다. 백오피스 권한·신청/상담 저장·DB 오류 rollback·이메일 부분 조회 17개와 기존 신청·상담 보존·변경 이력·교육 편집 폼·동시 제출·발송 처리권·기존 task 경로 호환·실제 qcluster 종료/복구를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
+2026-10-23 Windows에서 **154개 테스트**를 통과했습니다. 기존 백오피스·신청/상담 보존·동시 제출·발송 처리권·qcluster 종료/복구 검사와 신청 프리셋의 분포·날짜·재실행 보존·rollback·백오피스 조회 검사를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [신청 프리셋 검증 결과](docs/guides/verification.md#신청-프리셋-구현-검증-결과)와 이전 [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
 
 ## AI 도구 활용·추가 문서
 

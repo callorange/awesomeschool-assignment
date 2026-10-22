@@ -196,3 +196,27 @@ uv run python src/manage.py createsuperuser
 ```
 
 교육 프리셋 3개와 `education-notifications` 스케줄(5분 간격·무제한 반복·default cluster)을 준비합니다. 초기화로 관리자 계정도 사라지므로 새로 생성해야 합니다. 신청 admin 경로는 `/admin/education/educationapplication/`, 상담 안내 이메일은 `/admin/education/educationapplicationreminderemail/`입니다. task 경로와 `notification_status` 명령은 유지합니다.
+
+## 개발용 신청 샘플
+
+실제 업무 데이터와 분리한 개발 DB에서 사용합니다. 설정 모듈이 `config.settings.dev`이고 `NOTIFICATION_MODE=simulated`, `MAILERS["default"]["BACKEND"]`가 locmem일 때만 신청 옵션을 허용합니다. DEBUG만으로 허용하지 않으며 운영·외부 발송 backend는 교육/이미지 쓰기 전에 거부합니다. 개발 설정으로 공유 DB에 접속하는 것까지 자동 탐지하지는 않습니다. 옵션 없는 교육 초기화의 운영 S3 계약은 유지합니다.
+
+기존 활성 staff를 먼저 준비하고 qcluster·다른 안내 등록 프로세스를 정상 종료한 후 실행합니다. 계정·권한·비밀번호는 명령이 생성하거나 변경하지 않습니다. 화면 조회에는 신청·상담·이메일 조회 권한, 편집에는 신청 변경·상담 추가 권한이 필요하며 기존 superuser도 사용할 수 있습니다.
+
+```bash
+uv run python src/manage.py seed_educations --with-applications --staff-user reviewer
+```
+
+`reviewer`를 실제로 준비한 기존 사용자명으로 바꿉니다. staff 누락·미존재·비활성·non-staff와 신청 옵션 없는 `--staff-user`는 오류입니다. 이 계정은 가상 상담 작성자로 연결되며 실제 상담 수행 증거가 아닙니다. 상담은 `[샘플]`로 표시하고 기존 PROTECT 정책에 따라 연결 계정은 삭제 대신 비활성화합니다.
+
+- 교육별 신청은 11·11·10건, 신청 상태는 접수 8·상담중 6·재연락 10·완료 4·취소 4건입니다. 교육·상태가 최신순 목록에서 섞입니다.
+- 날짜는 최초 생성 당시 한국 시각 기준입니다. 연락 가능 날짜는 과거·오늘·미래이고 재연락은 오늘 3·지난 날짜 3·미래 날짜 2·미정 2건입니다. 오늘 중 지난 일정은 기한 경과 필터에도 포함됩니다.
+- 이름·주소·내용은 가상이고 이메일은 `application-preset-01@example.com`부터 32까지입니다. 상담 없음·부재중·재연락 합의·원기록을 보존한 정정 사례가 있습니다.
+- 고정 제출 UUID가 이미 있으면 신청·상담·안내·시도·history 전체를 건너뜁니다. 날짜 이동·상태 복구·누락 종속 기록 수리도 하지 않습니다. 현재 이메일을 정정해도 최초 snapshot으로 식별합니다. 불변 최초 이메일·교육 slug가 충돌하면 오류와 전체 DB rollback으로 처리합니다.
+- 일부 샘플만 있으면 없는 신청만 현재 실행 기준으로 추가합니다. 최초 전체 분포는 담당자 편집·날짜 경과·worker 처리 이후 보장하지 않습니다. 일반 신청·계정·기존 교육·미디어는 삭제하거나 초기화하지 않습니다.
+
+이메일은 `pending` 8·`queued` 3·`sending` 2·`simulated` 7·`retry_wait` 3·`failed` 2·`unknown` 3·`suppressed` 4건의 **화면 확인용 합성 상태**입니다. 모든 mode는 simulated이며 실제 발송·Q2 큐/스케줄 등록·공유 전송 예산 생성은 없습니다. `accepted`·SES 접수 시각·MessageId는 만들지 않습니다. 오류 코드는 `preset_simulated_` 접두어로 구분합니다. 합성 MailAttempt도 실제 외부 호출 증거가 아닙니다.
+
+먼저 worker 없이 목록·상세·이메일 상태를 확인하세요. 이후 worker와 정기 검사를 실행하면 도래 pending/retry_wait는 모의 처리되고 합성 queued는 실제 task가 없으므로 10분 만료 후 pending 복구·재등록됩니다. 합성 sending도 10분 만료 후 unknown으로 복구됩니다. 단순 상태 새로고침은 조회만 하고 재실행으로 초기 상태를 복원할 수 없습니다.
+
+실패하면 이번 실행의 새 교육·신청·상담·안내·시도·이력은 함께 rollback됩니다. Storage 쓰기는 DB transaction 밖이므로 파일이 남을 수 있다는 기존 안내·재실행 재사용 계약을 유지하며 자동 삭제하지 않습니다. 교육과 신청의 생성·건너뜀 건수를 따로 출력하며 건너뜀은 기존 데이터 보존을 뜻하고 자동 수리 완료를 뜻하지 않습니다.

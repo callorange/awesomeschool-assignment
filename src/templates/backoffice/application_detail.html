@@ -1,10 +1,10 @@
 {% extends 'backoffice/base.html' %}
 {% load static %}
-{% block title %}신청 상세{% endblock %}
+{% block title %}{{ application.name }} · {{ application.education_title }}{% endblock %}
 {% block heading %}
   <a href="{% url 'backoffice:application-list' %}" class="inline-flex min-h-11 items-center text-sm underline">← 신청 목록</a>
-  <h1 class="mt-3 text-3xl font-black">신청 상세</h1>
-  <p class="mt-3 text-sm text-ink/65">{{ application.education_title }} · {{ application.created_at|date:'Y.m.d H:i' }} 접수</p>
+  <h1 class="mt-3 text-3xl font-black">{{ application.name }}님의 교육 신청</h1>
+  <p class="mt-3 text-sm text-ink/65">{{ application.education_title }} · {{ application.created_at|date:'Y.m.d H:i' }} 접수 · 신청 ID {{ application.pk }}</p>
 {% endblock %}
 {% block content %}
   <div class="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">

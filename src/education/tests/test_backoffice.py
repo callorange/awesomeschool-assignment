@@ -14,6 +14,7 @@ from django.db import DatabaseError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape
 
 from education.models import ConsultationRecord, Education, EducationApplication
 from education.services.applications import EDITABLE_FIELDS
@@ -179,6 +180,25 @@ class BackofficeTests(TestCase):
             403,
         )
         self.assertEqual(self.client.get(self.email).status_code, 403)
+
+    def test_detail_identifies_application_for_editor_and_reader(self):
+        for user in (self.editor, self.reader):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+                response = self.client.get(self.detail)
+                self.assertContains(
+                    response,
+                    f"<title>{escape(self.application.name)} · "
+                    f"{escape(self.application.education_title)} | 어썸스쿨 백오피스</title>",
+                    html=True,
+                )
+                self.assertContains(
+                    response,
+                    '<h1 class="mt-3 text-3xl font-black">'
+                    f"{escape(self.application.name)}님의 교육 신청</h1>",
+                    html=True,
+                )
+                self.assertContains(response, f"신청 ID {self.application.pk}</p>")
 
     def test_listing_filters_pagination_and_empty_results(self):
         for number in range(22):
@@ -661,7 +681,7 @@ class BackofficePresetTests(TestCase):
                 {row.pk for row in response.context["page_obj"]},
                 set(expected.values_list("pk", flat=True)),
             )
-        for query in ("샘플 신청자 01", "application-preset-01@example.com"):
+        for query in ("김서윤", "application-preset-01@example.com"):
             self.assertEqual(
                 self.client.get(self.listing, {"q": query})
                 .context["page_obj"]

@@ -68,7 +68,13 @@ uv run --no-sync python src/manage.py check --settings=config.settings.prod
 uv run --no-sync python src/manage.py seed_educations --settings=config.settings.prod
 ```
 
-현재 운영 static backend는 로컬 StaticFilesStorage이며 STATIC_ROOT·collectstatic 산출물 서빙·웹 서버/서비스 관리자·HTTPS 배포는 아직 구성하지 않았습니다. S3/SES backend 설정이 있다는 것만으로 운영 배포가 완료된 것은 아닙니다. SNS·SQS·웹훅·configuration set은 현재 요구하지 않으며 실제 전달·반송 확인이 필요할 때 후속 연동합니다.
+정적 파일은 dev·prod 모두 로컬 StaticFilesStorage를 사용합니다. 아래 명령으로 `src/static/`과 Django admin 등 설치 앱의 자산을 저장소 루트의 `staticfiles/`(`STATIC_ROOT`)에 수집합니다. 수집 결과는 Git에서 제외하며 원본과 미디어는 별도로 유지합니다.
+
+```bash
+uv run --no-sync python src/manage.py collectstatic --noinput --settings=config.settings.prod
+```
+
+운영에서는 Nginx 등 웹 서버가 `/static/` 요청을 이 디렉터리로 연결하도록 설정해야 합니다. Django `urls.py`에 정적 파일 URL을 추가하지 않으며 실제 웹 서버/서비스 관리자·HTTPS 배포는 별도 범위입니다. S3/SES backend 설정과 정적 파일 수집만으로 운영 배포가 완료된 것은 아닙니다. SNS·SQS·웹훅·configuration set은 현재 요구하지 않으며 실제 전달·반송 확인이 필요할 때 후속 연동합니다.
 
 ## 백그라운드 worker와 자동 안내
 
@@ -99,6 +105,7 @@ Q2는 기본 큐 하나와 qcluster 하나를 사용하고 worker 2개가 메일
 | retry_wait | 확정 미접수 일시 오류 또는 공유 예산 대기, next_retry_at 이후 대상 |
 | failed | 확정 실패·설정 문제·시도 한도 초과, 자동 무한 재시도 없음 |
 | unknown | 접수 여부 불명, 증거 없이 자동 재발송·성공 판정하지 않음 |
+| suppressed | 완료·취소로 미처리 안내 중단, 상담을 재개해도 자동 발송 재개 없음 |
 
 동일 안내의 처리권을 row lock으로 확보하고 외부 전송 전에 commit합니다. 결과는 현재 attempt_id·예상 상태가 일치할 때 안내·시도 기록에 함께 반영합니다. accepted·simulated를 늦은 실패로 덮어쓰지 않으며 unknown은 같은 시도의 늦은 성공 응답·MessageId가 있을 때만 accepted로 복구합니다. 결과 저장 DB 장애는 sending을 남겨 이후 unknown으로 보존합니다.
 
@@ -125,7 +132,7 @@ uv run --no-sync python src/manage.py notification_status --settings=config.sett
 
 ## 이미지·초기 데이터
 
-`seed_educations`는 `presets/education/`의 JSON·이미지를 사전 검증하고 없는 교육만 추가합니다. 기존 운영 정보·이미지는 보존합니다. 원본 폴더는 배포물에도 포함해야 하며 일반 static이나 실행 중 업로드 파일로 사용하지 않습니다.
+옵션 없는 `seed_educations`는 `presets/education/`의 교육 JSON·이미지를 사전 검증하고 없는 교육만 추가합니다. 기존 운영 정보·이미지는 보존합니다. 개발 환경에서 신청·상담·모의 메일 사례도 준비하려면 [개발용 신청 샘플](#개발용-신청-샘플)의 선택 옵션과 기존 staff를 지정합니다. 원본 폴더는 배포물에도 포함해야 하며 일반 static이나 실행 중 업로드 파일로 사용하지 않습니다.
 
 이미지는 교육별 고정 UUIDv7 media_id 폴더에 저장합니다. 프리셋 파일은 내용 SHA256을 파일명으로 사용해 실패 후 남은 파일을 재사용하고 일반 업로드는 UUID 파일명을 사용합니다. slug 변경·초기화 재실행으로 기존 키를 이동하지 않으며 로컬·S3의 덮어쓰기를 허용하지 않습니다.
 
@@ -196,3 +203,27 @@ uv run python src/manage.py createsuperuser
 ```
 
 교육 프리셋 3개와 `education-notifications` 스케줄(5분 간격·무제한 반복·default cluster)을 준비합니다. 초기화로 관리자 계정도 사라지므로 새로 생성해야 합니다. 신청 admin 경로는 `/admin/education/educationapplication/`, 상담 안내 이메일은 `/admin/education/educationapplicationreminderemail/`입니다. task 경로와 `notification_status` 명령은 유지합니다.
+
+## 개발용 신청 샘플
+
+실제 업무 데이터와 분리한 개발 DB에서 사용합니다. 설정 모듈이 `config.settings.dev`이고 `NOTIFICATION_MODE=simulated`, `MAILERS["default"]["BACKEND"]`가 locmem일 때만 신청 옵션을 허용합니다. DEBUG만으로 허용하지 않으며 운영·외부 발송 backend는 교육/이미지 쓰기 전에 거부합니다. 개발 설정으로 공유 DB에 접속하는 것까지 자동 탐지하지는 않습니다. 옵션 없는 교육 초기화의 운영 S3 계약은 유지합니다.
+
+기존 활성 staff를 먼저 준비하고 qcluster·다른 안내 등록 프로세스를 정상 종료한 후 실행합니다. 계정·권한·비밀번호는 명령이 생성하거나 변경하지 않습니다. 화면 조회에는 신청·상담·이메일 조회 권한, 편집에는 신청 변경·상담 추가 권한이 필요하며 기존 superuser도 사용할 수 있습니다.
+
+```bash
+uv run python src/manage.py seed_educations --with-applications --staff-user reviewer
+```
+
+`reviewer`를 실제로 준비한 기존 사용자명으로 바꿉니다. staff 누락·미존재·비활성·non-staff와 신청 옵션 없는 `--staff-user`는 오류입니다. 이 계정은 가상 상담 작성자로 연결되며 실제 상담 수행 증거가 아닙니다. 상담은 `[샘플]`로 표시하고 기존 PROTECT 정책에 따라 연결 계정은 삭제 대신 비활성화합니다.
+
+- 교육별 신청은 11·11·10건, 신청 상태는 접수 8·상담중 6·재연락 10·완료 4·취소 4건입니다. 교육·상태가 최신순 목록에서 섞입니다.
+- 날짜는 최초 생성 당시 한국 시각 기준입니다. 연락 가능 날짜는 과거·오늘·미래이고 재연락은 오늘 3·지난 날짜 3·미래 날짜 2·미정 2건입니다. 오늘 중 지난 일정은 기한 경과 필터에도 포함됩니다.
+- 이름·주소·내용은 가상이고 이메일은 `application-preset-01@example.com`부터 32까지입니다. 상담 없음·부재중·재연락 합의·원기록을 보존한 정정 사례가 있습니다.
+- 고정 제출 UUID가 이미 있으면 신청·상담·안내·시도·history 전체를 건너뜁니다. 날짜 이동·상태 복구·누락 종속 기록 수리도 하지 않습니다. 현재 이메일을 정정해도 최초 snapshot으로 식별합니다. 불변 최초 이메일·교육 slug가 충돌하면 오류와 전체 DB rollback으로 처리합니다.
+- 일부 샘플만 있으면 없는 신청만 현재 실행 기준으로 추가합니다. 최초 전체 분포는 담당자 편집·날짜 경과·worker 처리 이후 보장하지 않습니다. 일반 신청·계정·기존 교육·미디어는 삭제하거나 초기화하지 않습니다.
+
+이메일은 `pending` 8·`queued` 3·`sending` 2·`simulated` 7·`retry_wait` 3·`failed` 2·`unknown` 3·`suppressed` 4건의 **화면 확인용 합성 상태**입니다. 모든 mode는 simulated이며 실제 발송·Q2 큐/스케줄 등록·공유 전송 예산 생성은 없습니다. `accepted`·SES 접수 시각·MessageId는 만들지 않습니다. 오류 코드는 `preset_simulated_` 접두어로 구분합니다. 합성 MailAttempt도 실제 외부 호출 증거가 아닙니다.
+
+먼저 worker 없이 목록·상세·이메일 상태를 확인하세요. 이후 worker와 정기 검사를 실행하면 도래 pending/retry_wait는 모의 처리되고 합성 queued는 실제 task가 없으므로 10분 만료 후 pending 복구·재등록됩니다. 합성 sending도 10분 만료 후 unknown으로 복구됩니다. 단순 상태 새로고침은 조회만 하고 재실행으로 초기 상태를 복원할 수 없습니다.
+
+실패하면 이번 실행의 새 교육·신청·상담·안내·시도·이력은 함께 rollback됩니다. Storage 쓰기는 DB transaction 밖이므로 파일이 남을 수 있다는 기존 안내·재실행 재사용 계약을 유지하며 자동 삭제하지 않습니다. 교육과 신청의 생성·건너뜀 건수를 따로 출력하며 건너뜀은 기존 데이터 보존을 뜻하고 자동 수리 완료를 뜻하지 않습니다.

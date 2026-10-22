@@ -1,13 +1,17 @@
 """실제 PostgreSQL에서 백오피스 권한·입력·원자적 저장·부분 조회를 검증한다."""
 
 from datetime import timedelta
+from io import StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.db import DatabaseError
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -566,3 +570,143 @@ class BackofficeTests(TestCase):
         self.assertEqual(strict.post(reverse("admin:login"), {}).status_code, 403)
         self.application.refresh_from_db()
         self.assertNotEqual(self.application.name, "秘密入力")
+
+
+class BackofficePresetTests(TestCase):
+    """실제 프리셋 명령의 결과를 권한 있는 백오피스 화면에서 확인한다.
+
+    테스트 DB와 임시 미디어에 신청을 준비하고 조회·필터·상담/이메일 응답을 검사한다.
+    명령의 생성 경로나 화면 조회를 mock하지 않으며 worker는 실행하지 않는다.
+    """
+
+    def setUp(self):
+        media = Path(self.enterContext(TemporaryDirectory()))
+        # 미디어 격리로 설정을 감쌀 때도 명령이 검사할 개발 모듈 식별자를 유지한다.
+        self.enterContext(
+            override_settings(MEDIA_ROOT=media, SETTINGS_MODULE="config.settings.dev")
+        )
+        self.editor = BackofficeTests.user(
+            "preset-editor",
+            "view_educationapplication",
+            "change_educationapplication",
+            "view_consultationrecord",
+            "add_consultationrecord",
+            "view_educationapplicationreminderemail",
+        )
+        call_command(
+            "seed_educations",
+            with_applications=True,
+            staff_user=self.editor.username,
+            stdout=StringIO(),
+        )
+        self.client.force_login(self.editor)
+        self.listing = reverse("backoffice:application-list")
+
+    def test_seeded_pages_filters_and_conditions(self):
+        pages = [self.client.get(self.listing, {"page": number}) for number in (1, 2)]
+        self.assertEqual([len(page.context["page_obj"]) for page in pages], [20, 12])
+        displayed = []
+        for response in pages:
+            rows = list(response.context["page_obj"])
+            self.assertEqual(len({row.education_slug for row in rows}), 3)
+            self.assertEqual(len({row.status for row in rows}), 5)
+            displayed.extend(row.pk for row in rows)
+        self.assertEqual(len(set(displayed)), 32)
+        self.assertEqual(
+            displayed,
+            list(
+                EducationApplication.objects.order_by("-created_at", "-pk").values_list(
+                    "pk", flat=True
+                )
+            ),
+        )
+        for field, values in (
+            (
+                "status",
+                {
+                    "received": 8,
+                    "consulting": 6,
+                    "follow_up": 10,
+                    "completed": 4,
+                    "cancelled": 4,
+                },
+            ),
+            (
+                "education_title",
+                {
+                    row.title: row.applications.count()
+                    for row in Education.objects.all()
+                },
+            ),
+        ):
+            for value, count in values.items():
+                response = self.client.get(self.listing, {field: value})
+                self.assertEqual(response.context["page_obj"].paginator.count, count)
+                self.assertTrue(
+                    all(
+                        getattr(row, field) == value
+                        for row in response.context["page_obj"]
+                    )
+                )
+        for category in ("today", "overdue", "undated"):
+            expected = EducationApplication.objects.filter(status="follow_up")
+            if category == "today":
+                expected = expected.filter(next_contact_at__date=timezone.localdate())
+            elif category == "overdue":
+                expected = expected.filter(next_contact_at__lt=timezone.now())
+            else:
+                expected = expected.filter(next_contact_at__isnull=True)
+            response = self.client.get(self.listing, {"follow_up": category})
+            self.assertEqual(
+                {row.pk for row in response.context["page_obj"]},
+                set(expected.values_list("pk", flat=True)),
+            )
+        for query in ("샘플 신청자 01", "application-preset-01@example.com"):
+            self.assertEqual(
+                self.client.get(self.listing, {"q": query})
+                .context["page_obj"]
+                .paginator.count,
+                1,
+            )
+        notification()
+        response = self.client.get(
+            self.listing, {"q": "application-preset-", "page": 2}
+        )
+        self.assertEqual(len(response.context["page_obj"]), 12)
+        self.assertEqual(response.context["page_obj"].paginator.count, 32)
+        self.assertContains(response, "q=application-preset-&amp;page=1")
+        query = {
+            "q": "application-preset-",
+            "education_title": Education.objects.first().title,
+            "status": "follow_up",
+            "follow_up": "undated",
+        }
+        response = self.client.get(self.listing, query)
+        for key in query:
+            self.assertIn(key + "=", response.context["query_string"])
+
+    def test_seeded_details_and_email_partial_are_read_only(self):
+        for row in EducationApplication.objects.all():
+            detail = reverse("backoffice:application-detail", args=[row.pk])
+            response = self.client.get(detail)
+            self.assertContains(response, row.email)
+            self.assertContains(response, row.get_status_display())
+            for record in row.consultations.all():
+                self.assertContains(response, record.content)
+            before = list(row.notification.attempts.values())
+            partial = self.client.get(reverse("backoffice:email-status", args=[row.pk]))
+            self.assertContains(partial, row.notification.get_state_display())
+            self.assertEqual(list(row.notification.attempts.values()), before)
+        reader = BackofficeTests.user("preset-reader", "view_educationapplication")
+        self.client.force_login(reader)
+        row = EducationApplication.objects.filter(status="consulting").first()
+        response = self.client.get(
+            reverse("backoffice:application-detail", args=[row.pk])
+        )
+        self.assertNotContains(response, "[샘플]")
+        self.assertEqual(
+            self.client.get(
+                reverse("backoffice:email-status", args=[row.pk])
+            ).status_code,
+            403,
+        )

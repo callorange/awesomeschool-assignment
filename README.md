@@ -3,7 +3,7 @@
 교육 소개를 확인한 방문자가 상담을 신청하고, 연락 가능 날짜에 안내를 받는 Django 사전 과제입니다.
 신청은 수강 확정이 아닌 **상담 접수**로 해석했습니다. 연락 가능 날짜도 교육 희망일과 구분합니다.
 
-[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [백오피스](#담당자용-백오피스) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
+[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [백오피스](#담당자용-백오피스) · [신청 샘플](#선택-백오피스-신청-샘플-32건) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
 
 ## 구현 범위
 
@@ -14,6 +14,7 @@
 | 신청 관리 | 반응형 백오피스와 기본 admin에서 조회·정정·상담·재연락·상태 관리. 변경 이력은 admin 조회. 신청 삭제 금지 |
 | DRF API | 신청 화면용 교육정보 GET·신청 POST·검증·반복 제출 보호 |
 | 자동 안내 | Q2 날짜별 검사·개발 모의 처리·운영 SES backend·선별 재시도 |
+| 개발 프리셋 | 교육 3개·이미지 기본 준비, 기존 staff를 지정해 신청 32건·상담·모의 이메일 상태 선택 생성 |
 
 별도 백오피스는 신청·상담 관리와 이메일 처리 상태 조회에 집중하고 교육·계정·권한·이력 상세와 내부 task 기록은 Django admin에서 확인합니다. Google Spreadsheet 내보내기는 미구현입니다. 과제의 삭제 항목 대신 신청·상담 기록을 보존하고 완료·취소로 처리하는 정책을 선택했습니다. AWS는 SES·S3/CloudFront 설정을 구현했으며 실제 배포와 운영 static 서빙은 포함하지 않았습니다.
 
@@ -72,6 +73,8 @@ uv run python src/manage.py seed_educations
 uv run python src/manage.py check
 ```
 
+백오피스용 신청 샘플도 확인하려면 worker를 시작하기 전에 [선택 샘플 준비](#선택-백오피스-신청-샘플-32건)를 진행합니다. 기본 명령은 신청이나 계정을 생성하지 않습니다.
+
 ### 5. 자동 안내 스케줄 등록
 
 연락 가능 날짜가 된 신청을 **5분마다 검사하는 스케줄을 DB에 등록**합니다. 반복해도 중복 등록되지 않습니다. 이 명령이 worker를 실행하거나 메일을 보내지는 않습니다.
@@ -121,6 +124,18 @@ uv run python src/manage.py notification_status
 
 페이지 이동·검색은 GET, 로그인·로그아웃·신청/상담 저장은 일반 POST입니다. 이메일 조회 권한이 있으면 상세의 **상태 새로고침**이 Ajax로 이메일 영역만 갱신하여 작성 중인 입력을 유지합니다. 자동 polling·재발송·task 관리 화면은 제공하지 않습니다. 일반 저장의 세션 만료·CSRF 실패는 저장 없이 안내하며 작성 내용 자동 복구는 지원하지 않습니다. [백오피스 확인 절차](docs/guides/verification.md#백오피스-확인)를 참고하세요.
 
+### 선택: 백오피스 신청 샘플 32건
+
+페이지네이션·검색·상태·재연락·상담·이메일 표시를 확인하려면 **기존 활성 staff 계정을 먼저 준비하고 qcluster를 중지한 개발 DB**에서 실행합니다. `reviewer`는 본인이 준비한 기존 사용자명으로 바꿉니다.
+
+```bash
+uv run python src/manage.py seed_educations --with-applications --staff-user reviewer
+```
+
+교육 3개에 가상 신청 11·11·10건을 추가합니다. 샘플만 있으면 백오피스 첫 페이지 20건·두 번째 12건이고 일반 신청도 있으면 `application-preset-`로 검색해 분리할 수 있습니다. 날짜는 최초 생성 당시 한국 시각 기준이며 재실행해도 날짜·담당자 수정값·상담·메일·이력을 덮어쓰지 않습니다. 옵션 없는 `seed_educations`는 기존 교육·이미지만 준비합니다.
+
+신청 옵션은 dev 설정·모의 메일 환경에서만 허용하며 계정 생성·실제 발송·큐 등록을 하지 않습니다. 샘플 이메일 상태는 화면 확인용 합성 기록으로 SES 접수 증거를 만들지 않습니다. worker 시작 후 상태가 바뀔 수 있으므로 [샘플 확인 순서](docs/guides/verification.md#신청-샘플-확인)대로 먼저 화면을 확인합니다. 환경·보존 계약은 [운영 가이드](docs/guides/operations.md#개발용-신청-샘플)를 참고하세요.
+
 ## 주요 설계 의도
 
 ```mermaid
@@ -148,7 +163,7 @@ SES 접수 성공은 실제 수신함 도착을 의미하지 않습니다. 외�
 
 ## 기술 스택·폴더 구조
 
-Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-simple-history 3.13.0 · django-ses 4.8.2 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
+Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-simple-history 3.13.0 · django-ses 4.8.2 · python-dateutil 2.9.0.post0 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
 
 ```text
 src/
@@ -162,7 +177,7 @@ src/
         migrations/     # 전체 모델을 생성하는 0001_initial.py
     templates/          # 공개 화면·백오피스 layout·메일 본문·admin 위젯
     static/             # 빌드 CSS·Axios 포함 JS·source map·라이선스 고지
-presets/education/      # 교육 3개의 초기 데이터·이미지 원본
+presets/education/      # 교육 3개·이미지 원본·선택 생성용 신청 32건 정의
 frontend/              # 입력 CSS·직접 편집하는 JavaScript
     entries/            # 페이지·공통 기능별 JavaScript 진입 파일
 docs/guides/            # 검토자를 위한 기능 검증·운영 설명
@@ -182,7 +197,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-2026-10-22 Windows에서 **141개 테스트**를 통과했습니다. 백오피스 권한·신청/상담 저장·DB 오류 rollback·이메일 부분 조회 17개와 기존 신청·상담 보존·변경 이력·교육 편집 폼·동시 제출·발송 처리권·기존 task 경로 호환·실제 qcluster 종료/복구를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
+2026-10-23 Windows에서 **154개 테스트**를 통과했습니다. 기존 백오피스·신청/상담 보존·동시 제출·발송 처리권·qcluster 종료/복구 검사와 신청 프리셋의 분포·날짜·재실행 보존·rollback·백오피스 조회 검사를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [신청 프리셋 검증 결과](docs/guides/verification.md#신청-프리셋-구현-검증-결과)와 이전 [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
 
 ## AI 도구 활용·추가 문서
 

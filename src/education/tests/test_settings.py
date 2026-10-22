@@ -9,7 +9,8 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured
-from django.test import SimpleTestCase
+from django.core.management import call_command
+from django.test import SimpleTestCase, override_settings
 
 
 class SettingsTests(SimpleTestCase):
@@ -168,6 +169,31 @@ class SettingsTests(SimpleTestCase):
         name = storage.save("education/example.txt", ContentFile(b"example"))
         self.assertEqual(storage.open(name).read(), b"example")
         self.assertEqual(storage.url(name), "/media/education/example.txt")
+
+    def test_collectstatic_collects_project_and_admin_assets(self):
+        """dev·prod 모두 원본과 분리한 로컬 경로에 프로젝트·admin 자산을 수집한다."""
+        self._production_environment()
+        for mode in ("dev", "prod"):
+            with self.subTest(mode=mode):
+                configured = self._load_settings(mode)
+                destination = configured["STATIC_ROOT"]
+                self.assertEqual(destination, self.env_file.parent / "staticfiles")
+                self.assertNotIn(destination, configured["STATICFILES_DIRS"])
+                self.assertNotEqual(destination, configured.get("MEDIA_ROOT"))
+                with override_settings(
+                    STATIC_ROOT=destination, STORAGES=configured["STORAGES"]
+                ):
+                    call_command("collectstatic", interactive=False, verbosity=0)
+                for name in (
+                    "css/site.css",
+                    "js/application.js",
+                    "js/backoffice-detail.js",
+                ):
+                    source = Path(__file__).resolve().parents[2] / "static" / name
+                    self.assertEqual(
+                        (destination / name).read_bytes(), source.read_bytes()
+                    )
+                self.assertTrue((destination / "admin/css/base.css").is_file())
 
     def test_background_and_email_environment_boundaries(self):
         configured = self._load_settings()

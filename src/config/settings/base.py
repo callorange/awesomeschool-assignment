@@ -152,6 +152,7 @@ SIMPLE_HISTORY_REVERT_DISABLED = True
 
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR.parent / "staticfiles"
 
 
 # Email

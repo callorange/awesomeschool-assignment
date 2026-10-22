@@ -46,9 +46,10 @@ Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니�
 
 ## 프리셋 변경과 검증
 
-- 초기 데이터 JSON과 이미지 원본은 `presets/education/`에서 함께 관리하고 출처 URL·수집일·요약 편집 여부를 유지합니다. 초기화 명령은 앱의 management command에 둡니다.
-- 원본·로딩 경로·초기화 명령을 바꾸면 실제 테스트 DB와 임시 미디어에서 `uv run python src/manage.py test education.tests.test_presets education.tests.test_pages`로 초기화·재실행 보존·실패 시 롤백·화면 렌더링을 검증합니다. 원본 위치만 옮길 때는 파일 내용의 보존도 확인합니다.
+- 초기 데이터 JSON과 이미지 원본은 `presets/education/`에서 함께 관리합니다. 수집한 교육 콘텐츠에는 출처 URL·수집일·요약 편집 여부를 유지하고 신청 샘플은 실제 개인정보를 사용하지 않는 가상 사례로 구분합니다. 초기화 명령은 앱의 management command에 둡니다.
+- 원본·로딩 경로·초기화 명령을 바꾸면 실제 테스트 DB와 임시 미디어에서 `uv run python src/manage.py test education.tests.test_presets education.tests.test_pages`로 초기화·재실행 보존·실패 시 롤백·화면 렌더링을 검증합니다. 신청 샘플을 바꾸면 같은 검사에 `education.tests.test_backoffice`를 포함해 목록·검색·필터·상세를 확인합니다. 원본 위치만 옮길 때는 파일 내용의 보존도 확인합니다.
 - 프리셋 변경만으로 기존 DB 레코드와 이미지가 갱신되지는 않습니다. 검증은 격리된 테스트 DB에서 수행하며, 확인을 위해 개발·공유 데이터나 저장소 파일을 지우지 않습니다.
+- 신청 샘플의 최초 날짜·고정 식별자와 재실행 보존, 합성 메일의 무발송·무큐 등록 및 worker 확인 순서는 [운영 가이드](guides/operations.md#개발용-신청-샘플)의 계약과 함께 검증합니다. 실제 결과와 미검증 범위는 [기능 검증 가이드](guides/verification.md#신청-프리셋-구현-검증-결과)에 기록합니다.
 
 ## Git Workflow
 

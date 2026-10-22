@@ -368,3 +368,4 @@ $RECYCLE.BIN/
 # Project-generated media and frontend dependencies
 /media/
 /node_modules/
+/staticfiles/

@@ -22,6 +22,7 @@ dependencies = [
     { name = "django-simple-history" },
     { name = "djangorestframework" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "python-dateutil" },
 ]
 
 [package.dev-dependencies]
@@ -43,6 +44,7 @@ requires-dist = [
     { name = "django-simple-history", specifier = ">=3.13,<3.14" },
     { name = "djangorestframework", specifier = ">=3.16,<4" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
+    { name = "python-dateutil", specifier = ">=2.9,<3" },
 ]
 
 [package.metadata.requires-dev]

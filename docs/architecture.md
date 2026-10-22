@@ -19,7 +19,7 @@
 | `src/templates/` | 공통 layout과 기능별 template를 담는 통합 폴더 |
 | `src/static/` | 빌드 CSS·JS·source map·라이선스 고지 등 배포 정적 자산을 담는 통합 폴더 |
 | `frontend/`, `package.json`, `package-lock.json` | CSS·JavaScript 소스, 통합 빌드 명령·의존성 설치 조합 |
-| `presets/education/` | 초기화용 JSON 프리셋과 이미지 원본 |
+| `presets/education/` | 교육 JSON·이미지 원본과 선택 생성용 신청 JSON 프리셋 |
 | `src/education/tests/` | 설정·모델·프리셋·공개 화면·백오피스·admin·API·메일·이미지·qcluster 테스트 |
 | `media/` | dev에서 생성되는 실행 중 미디어 파일; Git 제외 |
 | `docs/` | 과제 원문과 프로젝트 설계 설명 |
@@ -73,7 +73,7 @@
 
 uv는 `[tool.uv] package = false`인 비패키지 방식으로 사용합니다. 애플리케이션 자체를 빌드·설치할 필요가 없으므로 `[build-system]`을 두지 않습니다. 배포용 Python 라이브러리의 build backend 규칙과 구분합니다.
 
-공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`, `django-simple-history`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
+공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`, `django-simple-history`, `python-dateutil`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
 
 새 Django 프로젝트와 앱의 기본 골격은 LLM이 직접 작성하지 않고 Django의 `startproject`·`startapp` 명령으로 생성한 뒤 필요한 설정을 편집합니다. Django 기본 인증·admin·CSRF middleware를 유지합니다. 테스트는 앱의 `tests/` 패키지에 두며 같은 앱에 `tests.py`를 함께 두지 않습니다.
 
@@ -92,6 +92,10 @@ Education은 교육명·소개·미디어 FileField·목표·대상·시수별 �
 목표·대상과 커리큘럼은 JSONField를 사용하며 `education/validators.py`의 공통 field validator가 `full_clean()`에서 구조와 교시 순서를 검증합니다. `seed_educations`도 이 검증을 호출합니다. `save()`·`QuerySet.update()`·`bulk_create()`는 입력 검증을 자동 실행하지 않습니다. 기본 admin의 `EducationForm`은 목표·대상을 줄 단위 텍스트로 받고 커리큘럼은 총 차시 수·교시·주제·활동·설명을 입력하는 formset으로 편집합니다. 교시 추가·삭제와 오류 시 입력 보존을 지원하며 저장 전에 같은 공통 validator를 적용합니다. 관리자는 JSON 문법을 입력하지 않습니다. 신청 입력은 별도 serializer로 검증하고 신규 접수 시 교육 row lock 아래 접수 활성 여부를 확인합니다.
 
 프리셋 JSON과 이미지 원본은 앱의 실행 코드와 분리해 저장소 루트 `presets/education/`에 보관합니다. 초기화 명령은 `src/education/management/commands/`에 유지하고 Django `BASE_DIR`의 상위인 저장소 루트를 기준으로 프리셋을 찾습니다. 초기화를 실행할 배포물에도 이 폴더를 포함해야 합니다. 프리셋 원본은 Git으로 관리하며 직접 제공하는 static이나 실행 중 업로드 저장소로 사용하지 않습니다. `seed_educations`는 사전 검증 후 누락 교육만 추가하고 기존 교육의 운영 정보와 이미지를 보존합니다. source_url·source_image_url·collected_on·editorial_note는 프리셋 JSON에만 보관하고 초기화 시 DB 저장 대상에서 제외합니다. 신규 프리셋의 진행 안내는 과제용 정책임을 JSON의 편집 설명에 명시하며 상세 화면에는 수집 기록을 표시하지 않습니다. 저장소가 반환한 실제 이름을 DB에 기록합니다. DB 오류 시 transaction은 롤백되지만 파일은 남을 수 있으므로 자동 삭제하지 않고 재실행에서 재사용합니다.
+
+`application_presets.json`은 선택 생성할 가상 신청 32개의 고정 제출 UUID·교육 slug·개인정보·상태·상대 날짜·상담·모의 이메일 사례를 정의합니다. `seed_educations --with-applications --staff-user <기존 사용자명>`은 개발 설정·simulated·locmem 환경에서만 기존 활성 staff를 상담 작성자로 연결합니다. Django timezone으로 한 번 얻은 한국 시각과 python-dateutil의 relativedelta로 최초 날짜를 계산합니다. python-dateutil은 기존 잠금 버전을 유지한 공통 직접 의존성입니다. 전용 날짜 엔진이나 별도 모델 필드는 두지 않습니다.
+
+과거 신청 샘플의 최초 생성은 command가 모델 검증·일반 save로 수행하고 현재 시각 기준의 공개 API·업무 변경 서비스를 완화하지 않습니다. 초기 history는 시스템 작성자·샘플 사유·접수 시각을 기록하며 가짜 담당자 상태 전이 이력을 만들지 않습니다. 고정 request_id가 존재하면 불변 최초 이메일·교육 slug의 충돌만 확인한 뒤 신청과 종속 기록을 통째로 보존합니다. 새 신청·상담·안내·시도·이력과 새 교육은 한 transaction에서 저장하고 실패하면 모두 rollback합니다. 신규 교육 이미지는 Storage 반환 키를 최초 DB 저장에 사용하여 이미지 정리 큐도 만들지 않습니다. 상세 운영 경계와 합성 메일 상태는 [개발용 신청 샘플](guides/operations.md#개발용-신청-샘플)을 따릅니다.
 
 신규 교육 이미지의 저장 키는 `education/<media_id의 32자 hex>/images/<filename>`입니다. `media_id`는 `UUIDField(default=uuid7, unique=True, editable=False)`로 생성 전에 부여하며 교육 생성 후 변경하지 않습니다. 기존 숫자 PK와 상세 URL의 slug는 유지합니다. UUIDv7은 Django의 Python 기본값으로 생성하며 DB 기본값은 두지 않습니다. 프리셋에는 교육별 고정 UUIDv7을 기록하고 형식·버전·중복을 쓰기 전에 검증합니다. 일반 FileField 파일 저장은 `education/media.py`의 upload_to callable에서 UUID 파일명과 원본 확장자를 사용합니다. 프리셋은 실패 후 재사용할 수 있도록 SHA256 내용 해시와 `.png`를 사용합니다. 로컬·S3 모두 덮어쓰기를 허용하지 않습니다. 기존 `education/presets/` 등의 키는 자동 이동하지 않으며 slug만 바꿔도 기존 파일 키는 유지합니다. 경로 함수는 migration에서도 참조하므로 import 경로를 유지합니다. 프로젝트 schema는 전체 모델을 담은 단일 `src/education/migrations/0001_initial.py`로 빈 DB에 생성합니다. 이전 개발 migration 이력은 사용자 요청으로 통합했으며 기존 DB에 적용하는 업그레이드 경로는 제공하지 않습니다. 마이그레이션 정리 기준은 [개발 규약](development.md#마이그레이션-변경과-이력-정리)을 따릅니다.
 

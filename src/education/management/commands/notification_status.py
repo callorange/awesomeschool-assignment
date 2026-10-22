@@ -3,7 +3,7 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Count
 
-from education.models import ApplicationNotification
+from education.models import EducationApplicationReminderEmail
 
 
 class Command(BaseCommand):
@@ -12,12 +12,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         """상태별 건수와 확인 대상의 ID·오류 코드만 출력하며 DB 상태는 변경하지 않는다."""
         for row in (
-            ApplicationNotification.objects.values("state")
+            EducationApplicationReminderEmail.objects.values("state")
             .annotate(total=Count("pk"))
             .order_by("state")
         ):
             self.stdout.write(f"{row['state']}: {row['total']}")
-        rows = ApplicationNotification.objects.filter(
+        rows = EducationApplicationReminderEmail.objects.filter(
             state__in=["unknown", "sending", "failed"]
         ).order_by("pk")
         for row in rows.iterator():

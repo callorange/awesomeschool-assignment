@@ -7,6 +7,7 @@ dependencies = [
     "Django==6.1.2",
     "django-environ>=0.14,<0.15",
     "django-q2>=1.11,<1.12",
+    "django-simple-history>=3.13,<3.14",
     "djangorestframework>=3.16,<4",
     "psycopg[binary]>=3.2,<4",
 ]

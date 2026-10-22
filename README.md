@@ -9,13 +9,13 @@
 
 | 과제 항목 | 현재 구현 |
 | --- | --- |
-| 교육 소개 | 랜딩·교육 3개의 상세·커리큘럼·대표 이미지·접수 가능 여부 |
+| 교육 소개·관리 | 랜딩·교육 3개의 상세·커리큘럼·대표 이미지·접수 가능 여부. 기본 admin 등록·편집 |
 | 교육 신청 | 반응형 폼·주소 검색/직접 입력·Axios 비동기 제출·접수 상태 표시 |
-| 신청 관리 | **저장·접수 상태까지만 구현. 조회·수정·삭제·상태 변경은 미구현** |
+| 신청 관리 | 기본 admin 조회·정정·상담 누적·재연락·상태·변경 이력. 신청 삭제 금지 |
 | DRF API | 신청 화면용 교육정보 GET·신청 POST·검증·반복 제출 보호 |
 | 자동 안내 | Q2 날짜별 검사·개발 모의 처리·운영 SES backend·선별 재시도 |
 
-관리자 전용 신청 목록·Google Spreadsheet 내보내기는 미구현입니다. AWS는 SES·S3/CloudFront 설정을 구현했으며 실제 배포와 운영 static 서빙은 포함하지 않았습니다.
+별도 관리자 UI·Google Spreadsheet 내보내기는 미구현입니다. 신청 목록은 Django 기본 admin에서 제공합니다. 과제의 삭제 항목 대신 신청·상담 기록을 보존하고 완료·취소로 처리하는 정책을 선택했습니다. AWS는 SES·S3/CloudFront 설정을 구현했으며 실제 배포와 운영 static 서빙은 포함하지 않았습니다.
 
 ## 로컬 실행
 
@@ -64,7 +64,7 @@ docker compose up -d --wait db
 
 ### 4. 테이블·샘플 교육 준비
 
-`migrate`는 테이블을 만들고, `seed_educations`는 교육 3개와 로컬 이미지를 준비합니다. 초기 데이터 명령은 반복해도 기존 교육을 덮어쓰지 않습니다.
+`migrate`는 테이블을 만들고, `seed_educations`는 교육 3개와 로컬 이미지를 준비합니다. 초기 데이터 명령은 반복해도 기존 교육을 덮어쓰지 않습니다. 프로젝트의 migration은 빈 DB에 적용하는 `src/education/migrations/0001_initial.py` 하나입니다. 이전 개발 이력을 적용한 DB의 처리와 관리자 계정 준비는 [초기 migration 안내](docs/guides/operations.md#초기-migration과-개발-db-재생성)를 확인하세요.
 
 ```bash
 uv run python src/manage.py migrate --noinput
@@ -109,7 +109,7 @@ uv run python src/manage.py notification_status
 
 안내 대상은 **연락 가능 날짜의 한국 시각 09시부터**이며 다음 5분 검사와 큐 대기 후 처리됩니다. 오늘을 선택해도 09시 전이면 대기합니다. 즉시 확인용 자동 테스트와 API·장애 재현 방법은 [기능 검증 가이드](docs/guides/verification.md)에 있습니다.
 
-선택 사항으로 `uv run python src/manage.py createsuperuser`를 실행하면 [admin](http://127.0.0.1:8000/admin/)에서 Q2 스케줄·작업 결과를 확인할 수 있습니다. **신청 관리용 admin 메뉴는 아직 없습니다.**
+`uv run python src/manage.py createsuperuser`로 관리자를 만든 뒤 [admin](http://127.0.0.1:8000/admin/)에서 교육·신청·상담을 관리합니다. 교육 목표·추천 대상은 줄 단위 텍스트로, 커리큘럼은 교시별 폼으로 편집하여 JSON을 직접 입력하지 않습니다. 신청 목록은 검색·상태/교육/날짜·재연락 필터를 제공하며 상세에서 정보 정정·상담 추가·변경 이력을 확인합니다. 완료·취소해도 기록은 남습니다. 자동 안내·발송 시도·공유 예산은 조회 전용이고 Q2 메뉴도 유지합니다. 권한과 상세 절차는 [관리 기능 확인](docs/guides/verification.md#관리-기능-확인)을 참고하세요.
 
 종료할 때는 웹 서버·qcluster에서 `Ctrl+C`를 누르고 worker의 처리·결과 저장이 끝날 때까지 기다린 뒤 `docker compose down`으로 DB를 중지합니다. DB volume은 삭제하지 않습니다.
 
@@ -139,15 +139,17 @@ SES 접수 성공은 실제 수신함 도착을 의미하지 않습니다. 외�
 
 ## 기술 스택·폴더 구조
 
-Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-ses 4.8.2 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
+Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/esbuild · Axios 1.20.0 · Kakao 우편번호 검색 · Django Q2 1.11.1 · django-simple-history 3.13.0 · django-ses 4.8.2 · uv/Ruff를 사용합니다. 설치 조합은 `uv.lock`·`package-lock.json`으로 관리합니다.
 
 ```text
 src/
     config/             # base/dev/prod 설정·프로젝트 진입점
     education/          # 모델·DRF API·페이지·관리 명령·테스트
-        tasks.py        # 실제 Q2 task와 실행 흐름
-        tasks_support/  # 긴 상담 안내 task의 내부 처리
-    templates/          # 공통 layout·교육/신청 화면·메일 본문
+        forms/          # 교육·신청·상담별 admin 입력 폼
+        services/       # 신청 변경 검증·신청/이력/안내의 transaction 저장
+        tasks/          # Q2 진입점·메일 처리 단계·이미지 정리
+        migrations/     # 전체 모델을 생성하는 0001_initial.py
+    templates/          # 공통 layout·교육/신청 화면·메일 본문·admin 위젯
     static/             # 빌드 CSS·Axios 포함 JS·source map·라이선스 고지
 presets/education/      # 교육 3개의 초기 데이터·이미지 원본
 frontend/              # 입력 CSS·직접 편집하는 JavaScript
@@ -169,7 +171,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-2026-10-22 Windows에서 **98개 테스트**를 통과했습니다. 동시 제출·발송 처리권·SES fake SDK·실제 qcluster 종료/복구를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
+2026-10-22 Windows에서 **124개 테스트**를 통과했습니다. 신청·상담 보존·변경 이력·교육 편집 폼·동시 제출·발송 처리권·기존 task 경로 호환·실제 qcluster 종료/복구를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
 
 ## AI 도구 활용·추가 문서
 

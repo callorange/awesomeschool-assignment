@@ -94,6 +94,10 @@ Q2는 기본 큐 하나와 qcluster 하나를 사용하고 worker 2개가 메일
 uv run --no-sync python src/manage.py notification_status --settings=config.settings.prod
 ```
 
+실제 전송 backend는 `MAILERS["default"]["BACKEND"]`로 결정합니다. 안내 생성 시 저장한 mode는 `NOTIFICATION_MODE`와 일치하는지 확인하는 환경 구분값입니다. record의 mode를 바꿔 backend를 선택하는 구조가 아니므로 로컬에서도 prod 설정을 사용하면 SES backend가 선택됩니다.
+
+`MailSendBudget`은 SES 모드의 첫 claim에서 PK=1로 자동 생성하며 이후 worker가 같은 row를 잠가 공유합니다. 개발 simulated 경로는 이 row를 생성하지 않으므로 admin에 데이터가 없어도 정상입니다. `MailAttempt`는 실제 전송 처리권을 확보할 때 생성하며 Q2 task의 실행 결과와 별도로 전송 증거를 보존합니다.
+
 개발·운영은 DB를 분리합니다. 개발 simulated 기록을 운영에서 재발송하지 않습니다. 본문은 한국어 HTML·일반 텍스트이며 지연되어도 선택 날짜를 사실대로 표시하고 교육 일정 확정으로 표현하지 않습니다.
 
 ## 이미지·초기 데이터
@@ -107,6 +111,8 @@ uv run --no-sync python src/manage.py notification_status --settings=config.sett
 QuerySet.update·bulk_update·직접 SQL은 signal을 우회합니다. 새 파일 저장 후 DB rollback·프로세스 중단으로 고아 파일이 남을 수 있으며 전수 청소·프리셋 원본 삭제·별도 DLQ는 제공하지 않습니다. 초기화 실패 파일 재사용과 이미지 실패 재등록 시 참조 검사는 유지합니다.
 
 ## task 경로 변경 시 운영 절차
+
+현재 `tasks/` 패키지 분리는 `tasks/__init__.py`에서 기존 세 함수를 공개하므로 스케줄·큐의 `education.tasks.<함수명>` 경로는 유지합니다. 이 구조 변경만으로 스케줄 재등록·서명된 payload 편집은 필요하지 않습니다. 코드 배치 후에는 기존 worker를 정상 종료하고 새 코드로 재시작합니다. Django Q2 1.11의 실패 결과는 예외 객체 대신 traceback 문자열이므로 `SafeTaskError` 모듈 이동 때문에 기존 실패 기록을 변환하지 않습니다.
 
 Q2는 함수 경로를 스케줄·큐·실패 기록에 저장합니다. task 함수나 모듈 경로를 변경할 때는 해당 경로를 사용하는 영속 작업이 있는 환경에서 다음 절차를 적용합니다.
 
@@ -142,3 +148,28 @@ npm run build
 ```
 
 통합 빌드는 CSS와 진입점별 JS·필요한 공통 chunk·source map·라이선스 고지를 생성합니다. JavaScript 패키지는 필요한 소스에서 import하고, 새 페이지는 `frontend/entries/`에 진입 파일을 추가한 뒤 해당 template에서만 로드합니다. 둘 다 같은 `npm run build`를 사용합니다. 파일 배치와 전체·영역·페이지별 로딩은 [아키텍처](../architecture.md#javascript-진입점과-페이지별-로딩)를 따릅니다. CSS 변경 감시는 `npm run watch:css`, JavaScript는 별도 터미널의 `npm run watch:js`입니다. 빌드·배포 자산의 상세 규칙은 [개발 규약](../development.md#tailwind-css와-화면-검증)을 따릅니다. 종료는 `docker compose down`으로 데이터를 보존하며 volume을 삭제하지 않습니다.
+
+## 신청 관리와 안내 변경
+
+미처리(pending·queued·retry_wait) 신청의 이름·이메일 정정은 다음 발송에 반영합니다. 연락 가능 날짜를 실제로 정정하면 같은 안내의 due_at을 해당 날짜의 한국 시각 09시와 신청 시각 중 늦은 값으로 조정합니다. 메일의 교육명은 접수 당시 snapshot을 유지하고 이름·이메일·연락 가능 날짜는 정정한 현재 값을 사용합니다. 시도 횟수·재시도 허용 시각·전송 모드는 초기화하지 않습니다. 재연락 일정만 바꾸는 것은 안내에 영향을 주지 않습니다.
+
+완료·취소 시 미처리 안내는 **suppressed / 발송 중단**으로 보존합니다. 이미 큐에 있는 작업도 새 시도나 전송을 하지 않으며 재개한 상담에도 안내를 자동 재개하지 않습니다. accepted·simulated·unknown·failed의 기존 증거는 유지합니다. 수동 재발송·재연락 자동 알림은 제공하지 않습니다.
+
+sending 동안은 이름·이메일·연락 가능 날짜 정정과 완료·취소를 거부합니다. 주소·상담 기록·재연락 일정은 변경할 수 있습니다. 발송 결과가 저장되거나 기존 10분 만료 복구로 unknown이 된 뒤 다시 종료할 수 있습니다. 이미 외부 전송된 메일을 회수하거나 미발송이라고 보장하지 않습니다.
+
+## 초기 migration과 개발 DB 재생성
+
+프로젝트 소유 `education` 앱의 migration은 전체 최종 모델을 담은 `0001_initial.py` 하나입니다. Django·Django Q2 패키지의 migration은 그대로 사용합니다. 이전 개발 migration 이력과 호환되지 않으므로 기존 DB에서 `--fake`로 적용하지 않습니다. 공유·운영 DB는 이 초기 migration으로 업그레이드할 수 없으며 별도 전환 설계가 필요합니다.
+
+개발 DB를 초기화하면 교육·신청·상담·메일 증거·사용자/그룹 권한·계정·세션·Q2 작업과 스케줄도 사라집니다. `migrate`·`seed_educations`·`configure_background_tasks`는 DB 삭제 명령이 아니며, 이미 현재 schema가 있는 DB에서 재실행해도 신청·상담 기록을 초기화하지 않습니다. 미디어 파일과 프리셋 원본은 DB와 별도로 관리합니다. migration 정리와 데이터 초기화의 승인 기준은 [개발 규약](../development.md#마이그레이션-변경과-이력-정리)을 따릅니다.
+
+빈 DB 준비 순서는 다음과 같습니다. 웹·worker를 중지한 상태에서 실행하고 준비 후 같은 코드의 프로세스를 시작합니다.
+
+```bash
+uv run python src/manage.py migrate --noinput
+uv run python src/manage.py seed_educations
+uv run python src/manage.py configure_background_tasks
+uv run python src/manage.py createsuperuser
+```
+
+교육 프리셋 3개와 `education-notifications` 스케줄(5분 간격·무제한 반복·default cluster)을 준비합니다. 초기화로 관리자 계정도 사라지므로 새로 생성해야 합니다. 신청 admin 경로는 `/admin/education/educationapplication/`, 상담 안내 이메일은 `/admin/education/educationapplicationreminderemail/`입니다. task 경로와 `notification_status` 명령은 유지합니다.

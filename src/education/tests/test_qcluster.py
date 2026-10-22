@@ -18,7 +18,7 @@ from django.utils import timezone
 from django_q.models import Failure, OrmQ, Success
 from django_q.tasks import async_task
 
-from education.models import ApplicationNotification, Education, MailAttempt
+from education.models import Education, EducationApplicationReminderEmail, MailAttempt
 from education.tests.test_notifications import notification
 
 
@@ -96,7 +96,9 @@ class QClusterProcessTests(TransactionTestCase):
             self.stop_tree(process)
         self.assertIsNotNone(process.returncode)
         past = timezone.now() - timedelta(minutes=11)
-        ApplicationNotification.objects.filter(pk=row.pk).update(started_at=past)
+        EducationApplicationReminderEmail.objects.filter(pk=row.pk).update(
+            started_at=past
+        )
         OrmQ.objects.update(lock=past)
         waiting = notification(state="queued", queued_at=past)
         async_task("education.tasks.enqueue_consultation_reminder_emails")

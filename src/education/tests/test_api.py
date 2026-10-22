@@ -12,13 +12,13 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from education.models import (
-    Application,
-    ApplicationNotification,
     Education,
+    EducationApplication,
+    EducationApplicationReminderEmail,
     MailAttempt,
     MailSendBudget,
 )
-from education.serializers import ApplicationSerializer
+from education.serializers import EducationApplicationSerializer
 
 
 def application_payload(slug="test-course"):
@@ -84,7 +84,7 @@ class ApplicationAPITests(TestCase):
                 "status_display": "접수",
             },
         )
-        application = Application.objects.get()
+        application = EducationApplication.objects.get()
         self.assertEqual(
             (application.name, application.email, application.address_detail),
             ("홍길동", "User@example.com", ""),
@@ -117,8 +117,8 @@ class ApplicationAPITests(TestCase):
                 response = self.post(dict(self.payload, **{field: value}))
                 self.assertEqual(response.status_code, 400)
                 self.assertIn(field, response.json())
-        self.assertFalse(Application.objects.exists())
-        self.assertFalse(ApplicationNotification.objects.exists())
+        self.assertFalse(EducationApplication.objects.exists())
+        self.assertFalse(EducationApplicationReminderEmail.objects.exists())
 
     def test_contact_day_morning_and_late_submission_due_times(self):
         zone = ZoneInfo("Asia/Seoul")
@@ -130,7 +130,7 @@ class ApplicationAPITests(TestCase):
                     "education.serializers.timezone.localdate",
                     return_value=created.date(),
                 ):
-                    serializer = ApplicationSerializer(data=payload)
+                    serializer = EducationApplicationSerializer(data=payload)
                     serializer.is_valid(raise_exception=True)
                     application = serializer.save(created_at=created)
                 self.assertEqual(
@@ -140,15 +140,15 @@ class ApplicationAPITests(TestCase):
 
     def test_notification_and_send_budget_database_constraints(self):
         self.post()
-        notification = ApplicationNotification.objects.get()
+        notification = EducationApplicationReminderEmail.objects.get()
         with self.assertRaises(IntegrityError), transaction.atomic():
-            ApplicationNotification.objects.create(
+            EducationApplicationReminderEmail.objects.create(
                 application=notification.application,
                 due_at=notification.due_at,
                 mode="simulated",
             )
         with self.assertRaises(IntegrityError), transaction.atomic():
-            ApplicationNotification.objects.filter(pk=notification.pk).update(
+            EducationApplicationReminderEmail.objects.filter(pk=notification.pk).update(
                 attempt_count=4
             )
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -156,7 +156,7 @@ class ApplicationAPITests(TestCase):
 
     def test_repeat_conflict_and_snapshot_after_education_deletion(self):
         self.assertEqual(self.post().status_code, 201)
-        application = Application.objects.get()
+        application = EducationApplication.objects.get()
         self.assertEqual(self.post().status_code, 200)
         self.assertEqual(
             self.post(dict(self.payload, name="다른 이름")).status_code, 409
@@ -174,8 +174,8 @@ class ApplicationAPITests(TestCase):
         application.refresh_from_db()
         self.assertIsNone(application.education_id)
         self.assertEqual(application.education_title, "교육")
-        self.assertEqual(Application.objects.count(), 1)
-        self.assertEqual(ApplicationNotification.objects.count(), 1)
+        self.assertEqual(EducationApplication.objects.count(), 1)
+        self.assertEqual(EducationApplicationReminderEmail.objects.count(), 1)
 
     def test_stopped_missing_and_atomic_notification_failure(self):
         self.assertEqual(
@@ -187,13 +187,13 @@ class ApplicationAPITests(TestCase):
         self.education.is_accepting_inquiries = True
         self.education.save()
         with patch(
-            "education.serializers.ApplicationNotification.objects.create",
+            "education.serializers.EducationApplicationReminderEmail.objects.create",
             side_effect=RuntimeError("failure"),
         ):
             with self.assertRaises(RuntimeError):
                 self.post()
-        self.assertFalse(Application.objects.exists())
-        self.assertFalse(ApplicationNotification.objects.exists())
+        self.assertFalse(EducationApplication.objects.exists())
+        self.assertFalse(EducationApplicationReminderEmail.objects.exists())
 
     def test_csrf_is_enforced_for_anonymous_post(self):
         from django.middleware.csrf import get_token
@@ -211,6 +211,49 @@ class ApplicationAPITests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
 
+    def test_original_submission_survives_management_changes_without_disclosure(self):
+        from education.services.applications import save_application
+
+        self.assertEqual(self.post().status_code, 201)
+        application = EducationApplication.objects.get()
+        for status in ("follow_up", "completed", "cancelled"):
+            save_application(
+                application.pk,
+                {
+                    "name": "정정 이름",
+                    "email": "corrected@example.com",
+                    "address": "정정 주소",
+                    "contact_date": timezone.localdate() + timedelta(days=1),
+                    "status": status,
+                    "cancellation_reason": "진행 중단 합의",
+                },
+                None,
+            )
+            response = self.post()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response.json(),
+                {
+                    "request_id": self.payload["request_id"],
+                    "status": "received",
+                    "status_display": "접수",
+                },
+            )
+            self.assertEqual(
+                self.post(dict(self.payload, name="정정 이름")).status_code, 409
+            )
+            application.refresh_from_db()
+            self.assertEqual(
+                (application.name, application.status), ("정정 이름", status)
+            )
+        self.assertEqual(
+            (
+                EducationApplication.objects.count(),
+                EducationApplicationReminderEmail.objects.count(),
+            ),
+            (1, 1),
+        )
+
 
 class ConcurrentSubmissionTests(TransactionTestCase):
     def test_original_commit_and_stop_between_repeat_lookup_and_education_lock(self):
@@ -225,7 +268,7 @@ class ConcurrentSubmissionTests(TransactionTestCase):
                 result = execute(sql, params, many, context)
                 if (
                     sql.startswith("SELECT")
-                    and '"education_application"' in sql
+                    and '"education_educationapplication"' in sql
                     and not lookup_done.is_set()
                 ):
                     lookup_done.set()
@@ -235,7 +278,7 @@ class ConcurrentSubmissionTests(TransactionTestCase):
 
             try:
                 with connections["default"].execute_wrapper(wait_after_lookup):
-                    serializer = ApplicationSerializer(data=payload)
+                    serializer = EducationApplicationSerializer(data=payload)
                     serializer.is_valid(raise_exception=True)
                     serializer.save()
                     return serializer.created
@@ -246,7 +289,7 @@ class ConcurrentSubmissionTests(TransactionTestCase):
             pending = executor.submit(repeat)
             try:
                 self.assertTrue(lookup_done.wait(timeout=5))
-                original = ApplicationSerializer(data=payload)
+                original = EducationApplicationSerializer(data=payload)
                 original.is_valid(raise_exception=True)
                 original.save()
                 Education.objects.filter(slug="test-course").update(
@@ -255,8 +298,8 @@ class ConcurrentSubmissionTests(TransactionTestCase):
             finally:
                 resume.set()
             self.assertFalse(pending.result(timeout=10))
-        self.assertEqual(Application.objects.count(), 1)
-        self.assertEqual(ApplicationNotification.objects.count(), 1)
+        self.assertEqual(EducationApplication.objects.count(), 1)
+        self.assertEqual(EducationApplicationReminderEmail.objects.count(), 1)
 
     def test_same_submission_in_separate_connections_creates_one_target(self):
         Education.objects.create(slug="test-course", title="교육")
@@ -266,7 +309,7 @@ class ConcurrentSubmissionTests(TransactionTestCase):
         def submit():
             close_old_connections()
             try:
-                serializer = ApplicationSerializer(data=payload)
+                serializer = EducationApplicationSerializer(data=payload)
                 serializer.is_valid(raise_exception=True)
                 barrier.wait(timeout=5)
                 serializer.save()
@@ -277,15 +320,15 @@ class ConcurrentSubmissionTests(TransactionTestCase):
         with ThreadPoolExecutor(max_workers=2) as executor:
             results = list(executor.map(lambda _: submit(), range(2)))
         self.assertEqual(sorted(results), [False, True])
-        self.assertEqual(Application.objects.count(), 1)
-        self.assertEqual(ApplicationNotification.objects.count(), 1)
+        self.assertEqual(EducationApplication.objects.count(), 1)
+        self.assertEqual(EducationApplicationReminderEmail.objects.count(), 1)
 
     def test_outer_rollback_removes_application_and_target(self):
         Education.objects.create(slug="test-course", title="교육")
         with self.assertRaises(RuntimeError), transaction.atomic():
-            serializer = ApplicationSerializer(data=application_payload())
+            serializer = EducationApplicationSerializer(data=application_payload())
             serializer.is_valid(raise_exception=True)
             serializer.save()
             raise RuntimeError("rollback")
-        self.assertFalse(Application.objects.exists())
-        self.assertFalse(ApplicationNotification.objects.exists())
+        self.assertFalse(EducationApplication.objects.exists())
+        self.assertFalse(EducationApplicationReminderEmail.objects.exists())

@@ -9,9 +9,14 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from ..models import ApplicationNotification, MailAttempt, MailSendBudget
+from ..models import (
+    EducationApplication,
+    EducationApplicationReminderEmail,
+    MailAttempt,
+    MailSendBudget,
+)
 
-State = ApplicationNotification.State
+State = EducationApplicationReminderEmail.State
 
 
 def claim(notification_id):
@@ -20,14 +25,15 @@ def claim(notification_id):
     전송 전에 MailAttempt·현재 시도 식별자·횟수를 같은 transaction에 commit한다.
     공유 예산 대기는 lock 밖에서 최대 5초 수행하고 더 길면 retry_wait로 보존한다.
     예산 대기·중복 전달·환경 불일치 등 전송하지 않는 경우 None을 반환한다.
+    안내→신청 순서로 잠가 관리 저장과 직렬화한다. mode는 생성 환경과 현재 환경의
+    일치 확인에 사용하며 실제 이메일 backend를 선택하지 않는다.
     """
     deadline = monotonic() + 5
     while True:
         wait = 0
         with transaction.atomic():
             row = (
-                ApplicationNotification.objects.select_for_update()
-                .select_related("application")
+                EducationApplicationReminderEmail.objects.select_for_update()
                 .filter(pk=notification_id)
                 .first()
             )
@@ -40,11 +46,16 @@ def claim(notification_id):
                 or (row.next_retry_at and row.next_retry_at > now)
             ):
                 return None
+            row.application = EducationApplication.objects.select_for_update().get(
+                pk=row.application_id
+            )
+            if row.application.status in EducationApplication.TERMINAL_STATUSES:
+                return None
             if row.mode != settings.NOTIFICATION_MODE:
                 row.state, row.error_code = State.FAILED, "environment_mismatch"
                 row.save(update_fields=["state", "error_code"])
                 return None
-            if row.mode == ApplicationNotification.Mode.SES:
+            if row.mode == EducationApplicationReminderEmail.Mode.SES:
                 budget, _ = MailSendBudget.objects.select_for_update().get_or_create(
                     pk=1
                 )
@@ -94,7 +105,7 @@ def record_result(
     재시도 시각은 이 결과 기록 시각부터 delay만큼 계산한다.
     """
     with transaction.atomic():
-        row = ApplicationNotification.objects.select_for_update().get(
+        row = EducationApplicationReminderEmail.objects.select_for_update().get(
             pk=notification_id
         )
         if row.attempt_id != attempt_id:
@@ -129,8 +140,10 @@ def record_result(
 
 
 def build_message(application):
-    """신청 당시 snapshot으로 HTML·텍스트 메일을 생성하며 실제 전송은 하지 않는다.
+    """신청의 현재 관리값과 접수 당시 교육명으로 HTML·텍스트 메일을 생성한다.
 
+    교육명은 접수 당시 snapshot을 사용하지만 이름·이메일·연락 가능 날짜는 관리자가
+    정정한 현재 값을 반영한다. 실제 전송은 호출자가 설정된 Django backend로 수행한다.
     주소 등 상담에 불필요한 개인정보는 본문에서 제외한다. 제목의 줄바꿈을
     제거하고 HTML 본문의 사용자 입력은 template의 기본 escaping을 따른다.
     """
@@ -232,7 +245,7 @@ def classify_result(count, message, mode):
     """
     message_id = message.extra_headers.get("message_id", "")
     if count == 1:
-        if mode == ApplicationNotification.Mode.SIMULATED:
+        if mode == EducationApplicationReminderEmail.Mode.SIMULATED:
             return State.SIMULATED, "", ""
         if isinstance(message_id, str) and 0 < len(message_id) <= 255:
             return State.ACCEPTED, "", message_id

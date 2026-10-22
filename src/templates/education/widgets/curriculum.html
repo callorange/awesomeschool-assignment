@@ -1,0 +1,14 @@
+<div id="{{ widget.attrs.id }}" data-curriculum-editor>
+  {{ widget.formset.management_form }}
+  {{ widget.formset.non_form_errors }}
+  <div data-curriculum-rows>
+    {% for form in widget.formset %}
+      {% include "education/widgets/lesson.html" %}
+    {% endfor %}
+  </div>
+  <template data-curriculum-template>
+    {% include "education/widgets/lesson.html" with form=widget.formset.empty_form %}
+  </template>
+  <button type="button" data-add-lesson disabled>교시 추가</button>
+  <p class="help">교시를 지우려면 해당 교시의 삭제를 선택하고 저장하세요.</p>
+</div>

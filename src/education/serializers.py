@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import APIException, NotFound
 
-from .models import Application, ApplicationNotification, Education
+from .models import Education, EducationApplication, EducationApplicationReminderEmail
 
 
 class SubmissionConflict(APIException):
@@ -36,7 +36,7 @@ class EducationSerializer(serializers.ModelSerializer):
         )
 
 
-class ApplicationSerializer(serializers.Serializer):
+class EducationApplicationSerializer(serializers.Serializer):
     """입력을 정규화한 뒤 기존 제출을 확인하고 신규 신청·안내만 함께 생성한다.
 
     저장 후 created로 신규 생성 여부를 제공하며 API가 201/200을 구분한다.
@@ -68,7 +68,9 @@ class ApplicationSerializer(serializers.Serializer):
         Raises:
             SubmissionConflict: 같은 request_id에 다른 입력이 제출된 경우.
         """
-        if any(getattr(application, field) != value for field, value in values.items()):
+        if application.submission_snapshot != {
+            field: str(value) for field, value in values.items()
+        }:
             raise SubmissionConflict()
         self.created = False
         return application
@@ -86,7 +88,7 @@ class ApplicationSerializer(serializers.Serializer):
             SubmissionConflict: 같은 request_id에 다른 입력이 저장된 경우.
         """
         with transaction.atomic():
-            existing = Application.objects.filter(
+            existing = EducationApplication.objects.filter(
                 request_id=validated_data["request_id"]
             ).first()
             if existing:
@@ -97,7 +99,7 @@ class ApplicationSerializer(serializers.Serializer):
                 .first()
             )
             # 교육 lock을 기다리는 동안 원래 제출이 commit됐을 수 있다.
-            existing = Application.objects.filter(
+            existing = EducationApplication.objects.filter(
                 request_id=validated_data["request_id"]
             ).first()
             if existing:
@@ -114,7 +116,7 @@ class ApplicationSerializer(serializers.Serializer):
                 )
             try:
                 with transaction.atomic():
-                    application = Application.objects.create(
+                    application = EducationApplication.objects.create(
                         **validated_data,
                         education=education,
                         education_title=education.title,
@@ -124,13 +126,13 @@ class ApplicationSerializer(serializers.Serializer):
                         time(9),
                         tzinfo=ZoneInfo(settings.TIME_ZONE),
                     )
-                    ApplicationNotification.objects.create(
+                    EducationApplicationReminderEmail.objects.create(
                         application=application,
                         due_at=max(morning, application.created_at),
                         mode=settings.NOTIFICATION_MODE,
                     )
             except IntegrityError:
-                existing = Application.objects.filter(
+                existing = EducationApplication.objects.filter(
                     request_id=validated_data["request_id"]
                 ).first()
                 if existing is None:

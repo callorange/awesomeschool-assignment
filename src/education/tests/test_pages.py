@@ -74,7 +74,7 @@ class EducationPageTests(TestCase):
         self.assertEqual(self.client.get("/educations/missing/").status_code, 404)
         self.assertEqual(self.client.post("/").status_code, 405)
 
-    def test_operation_information_is_escaped_and_has_no_application_link(self):
+    def test_operation_information_is_escaped_and_links_to_application(self):
         education = Education.objects.get(slug="prompt-hero")
         note = "<script>공개 안내</script>\n준비사항을 확인하세요."
         for operation_type, label in Education.OperationType.choices:
@@ -92,7 +92,9 @@ class EducationPageTests(TestCase):
                 )
                 self.assertContains(response, "&lt;script&gt;공개 안내&lt;/script&gt;")
                 self.assertNotContains(response, "<script>")
-                self.assertNotContains(response, "/apply/")
+                self.assertContains(
+                    response, reverse("education:application", args=[education.slug])
+                )
                 self.assertNotContains(response, "<form")
 
     def test_inactive_education_remains_public_and_empty_note_is_omitted(self):
@@ -117,6 +119,44 @@ class EducationPageTests(TestCase):
             response = self.client.get(path)
             self.assertNotContains(response, "<script>")
             self.assertContains(response, "&lt;script&gt;")
+
+    def test_application_shell_has_csrf_api_links_and_accessible_fields(self):
+        response = self.client.get("/educations/prompt-hero/apply/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "education/application.html")
+        self.assertIn("csrftoken", response.cookies)
+        for text in (
+            'data-education-url="/api/educations/prompt-hero/"',
+            'data-submit-url="/api/applications/"',
+            'name="csrfmiddlewaretoken"',
+            'autocomplete="email"',
+            'type="date"',
+            'aria-live="polite"',
+            "/static/js/application.js",
+            "주소 검색",
+            "직접 입력",
+        ):
+            self.assertContains(response, text)
+        for name in (
+            "name",
+            "email",
+            "postal_code",
+            "address",
+            "address_detail",
+            "contact_date",
+        ):
+            self.assertContains(response, f'for="{name}"')
+            self.assertContains(response, f'id="{name}-error"')
+        self.assertEqual(self.client.get("/educations/missing/apply/").status_code, 404)
+        self.assertEqual(
+            self.client.post("/educations/prompt-hero/apply/").status_code, 405
+        )
+        Education.objects.filter(slug="prompt-hero").update(
+            is_accepting_inquiries=False
+        )
+        response = self.client.get("/educations/prompt-hero/apply/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="application-fields" disabled')
 
     def test_same_templates_use_cloudfront_in_production(self):
         """운영 저장소 URL 렌더링을 검사하며 실제 S3·CloudFront에는 연결하지 않는다."""

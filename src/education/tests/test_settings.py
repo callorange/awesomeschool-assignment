@@ -152,6 +152,9 @@ class SettingsTests(SimpleTestCase):
             AWS_STORAGE_BUCKET_NAME="example-education",
             AWS_S3_REGION_NAME="ap-northeast-2",
             AWS_S3_CUSTOM_DOMAIN="cdn.example.com",
+            AWS_SES_REGION_NAME="ap-northeast-2",
+            DEFAULT_FROM_EMAIL="no-reply@example.com",
+            SES_MAX_SEND_RATE="2",
         )
 
     def test_dev_uses_local_media(self):
@@ -165,6 +168,38 @@ class SettingsTests(SimpleTestCase):
         name = storage.save("education/example.txt", ContentFile(b"example"))
         self.assertEqual(storage.open(name).read(), b"example")
         self.assertEqual(storage.url(name), "/media/education/example.txt")
+
+    def test_background_and_email_environment_boundaries(self):
+        configured = self._load_settings()
+        self.assertEqual(configured["Q_CLUSTER"]["orm"], "default")
+        self.assertEqual(configured["Q_CLUSTER"]["workers"], 2)
+        self.assertNotIn("ALT_CLUSTERS", configured["Q_CLUSTER"])
+        self.assertEqual(configured["NOTIFICATION_MODE"], "simulated")
+        self.assertEqual(
+            configured["MAILERS"]["default"]["BACKEND"],
+            "django.core.mail.backends.locmem.EmailBackend",
+        )
+        self._production_environment()
+        configured = self._load_settings("prod")
+        self.assertEqual(configured["NOTIFICATION_MODE"], "ses")
+        self.assertEqual(
+            configured["MAILERS"]["default"]["BACKEND"], "django_ses.SESBackend"
+        )
+        self.assertEqual(configured["AWS_SES_CONFIG"].retries["total_max_attempts"], 1)
+        self.assertIsNone(configured["AWS_SES_AUTO_THROTTLE"])
+        self.assertNotIn("AWS_SES_CONFIGURATION_SET", configured)
+
+    def test_prod_requires_email_settings_and_valid_rate(self):
+        self._production_environment()
+        for name in ("AWS_SES_REGION_NAME", "DEFAULT_FROM_EMAIL", "SES_MAX_SEND_RATE"):
+            original = self.environment.pop(name)
+            with self.assertRaisesMessage(ImproperlyConfigured, name):
+                self._load_settings("prod")
+            self.environment[name] = original
+        for value in ("0", "-1", "nan", "inf", "invalid"):
+            self.environment["SES_MAX_SEND_RATE"] = value
+            with self.assertRaisesMessage(ImproperlyConfigured, "SES_MAX_SEND_RATE"):
+                self._load_settings("prod")
 
     def test_prod_generates_cloudfront_url_without_aws_calls(self):
         from storages.backends.s3 import S3Storage

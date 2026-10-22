@@ -8,6 +8,17 @@
 
 Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니다. 에이전트 스킬·template managed 파일과 도구 캐시는 검사·자동 수정하지 않습니다. 새 주석과 docstring은 한국어로 작성하되 Django가 생성한 기존 설명은 유지합니다. 코드만으로 드러나지 않는 책임·입력 구조·반환·오류·중요한 side effect를 Google-style docstring으로 설명하고, 주석에는 정책과 제약의 이유를 기록합니다. 자명한 wrapper나 framework override마다 설명을 반복하지 않습니다. 계약 변경 시 관련 설명도 함께 갱신합니다.
 
+## 함수 분리와 실행 흐름의 가독성
+
+- 진입점에서는 주요 처리 순서와 성공·실패 흐름을 파악할 수 있게 구성합니다.
+- 함수 분리는 줄 수보다 독립적인 책임·업무 규칙·transaction 경계·재사용 필요성을 기준으로 판단합니다. 함수 길이나 파일 개수에 일률적인 제한을 두지 않습니다.
+- 사용 위치에서 바로 이해할 수 있는 짧은 표현·단순 대입·불필요한 위임은 별도 함수로 추출하지 않습니다. 짧은 함수라도 중요한 공통 규칙을 표현하거나 중복된 정책의 불일치를 방지한다면 유지할 수 있습니다.
+- 보조 함수가 많거나 길어 주요 흐름을 가리면 관련 책임별 모듈로 분리합니다. 모든 진입점에 대응 모듈을 기계적으로 만들지는 않습니다. task의 구체적인 배치는 [백그라운드 task 구성](architecture.md#백그라운드-task-구성)을 따릅니다.
+- 함수·모듈 이름은 업무 목적과 수행 동작을 드러냅니다. 모듈에서 이미 제공하는 문맥을 함수 이름에 반복할 필요는 없습니다.
+- 구조 변경 시 기존 권한·transaction·오류·상태 전이·외부 호출 계약을 보존하고, 직접 영향을 받는 호출부·테스트·문서를 함께 수정합니다.
+
+이 기준은 관련 코드의 작성·수정 시 적용하며 기존 코드를 일괄 재구성하는 근거로 사용하지 않습니다.
+
 ## 환경별 설치와 설정 검증
 
 - 기본 `uv sync --locked`는 공통+dev+prod 의존성을 설치합니다. 운영은 `uv sync --locked --no-default-groups --group prod`로 공통+prod만 설치하며 Ruff 등 개발 도구가 없어야 합니다. 운영 실행은 직접 가상환경 실행 또는 `uv run --no-sync`로 기존 설치를 유지합니다.
@@ -18,9 +29,9 @@ Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니�
 
 - 프로젝트 template와 static은 `src/templates/`와 `src/static/`에 통합하고, template는 기능별 하위 폴더로 구분합니다. 공통 layout은 `src/templates/base.html`을 사용합니다. 앱 내부에 프로젝트 소유 template·static 폴더를 새로 분산하지 않습니다.
 - 스타일은 현재의 npm 기반 Tailwind CSS CLI로 작성합니다. `frontend/styles.css`가 입력이고 `src/static/css/site.css`가 생성물입니다. 클래스는 template에 완전한 문자열로 작성합니다.
-- 개발 도구는 `npm ci`로 설치합니다. `npm run build:css`로 빌드하고 `npm run watch:css`로 변경을 감시합니다. template·스타일 변경과 생성 CSS·package-lock을 같은 논리적 작업에 포함합니다. 생성 CSS를 직접 편집하지 않습니다.
-- 로컬·평가 실행은 저장소에 포함된 CSS를 사용하며 Tailwind CDN·외부 글꼴을 요구하지 않습니다. npm 패키지는 개발 도구로만 사용하고 운영 런타임 설치에 넣지 않습니다.
-- 랜딩과 교육 상세를 360px·768px·1280px에서 확인합니다. 카드 1·2·3열, 본문·커리큘럼 잘림과 가로 스크롤, 이미지 비율, 키보드 포커스와 주요 터치 영역을 검증합니다. 반응형 검증을 HTML 렌더링 테스트만으로 대체하지 않습니다.
+- 개발 도구와 배포 자산 의존성은 `npm ci`로 설치합니다. `npm run build:css`로 빌드하고 `npm run watch:css`로 변경을 감시합니다. `npm run vendor:axios`로 lockfile에 고정한 Axios ESM 파일·source map·라이선스를 `src/static/vendor/axios/`에 복사합니다. 생성 자산·package-lock·관련 template를 같은 작업에 포함하며 생성 파일을 직접 편집하지 않습니다.
+- 로컬·평가 실행은 저장소의 CSS·Axios 자산을 사용하며 Node.js·외부 Axios CDN·Tailwind CDN·외부 글꼴을 요구하지 않습니다. Tailwind는 npm 개발 도구이고 Axios는 브라우저 배포 자산 의존성입니다. 둘 다 Django 운영 서버에서 npm 설치·실행을 요구하지 않습니다.
+- 랜딩·교육 상세·신청을 360px·390px·768px·1280px에서 확인합니다. 카드 1·2·3열, 본문·커리큘럼·폼 잘림과 가로 스크롤, 이미지 비율, 키보드 포커스와 터치 영역을 검증합니다. 반응형 검증을 HTML 렌더링 테스트로 대체하지 않고 Android Chrome·iOS Safari 실기기 확인 여부를 별도로 기록합니다.
 - 빌드 재현성은 같은 lockfile로 CSS를 재빌드해 산출물의 hash를 비교합니다. CSS와 이미지의 HTTP 200도 실제 서버에서 확인합니다.
 
 ## 프리셋 변경과 검증

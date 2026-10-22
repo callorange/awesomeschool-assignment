@@ -1,7 +1,10 @@
-"""명시적인 운영 설정으로 S3에 저장하고 CloudFront로 미디어를 제공한다."""
+"""명시적인 운영 설정으로 S3 미디어와 SES 이메일 backend를 선택한다."""
 
+import math
+
+from botocore.config import Config
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.core.validators import validate_domain_name
+from django.core.validators import validate_domain_name, validate_email
 
 from . import base
 from .base import *  # noqa: F403
@@ -35,7 +38,33 @@ STORAGES = {
             "file_overwrite": False,
             "querystring_auth": False,
             "cloudfront_signer": None,
+            "client_config": Config(
+                connect_timeout=5, read_timeout=15, retries={"total_max_attempts": 1}
+            ),
         },
     },
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+
+AWS_SES_REGION_NAME = base._required_env("AWS_SES_REGION_NAME")
+DEFAULT_FROM_EMAIL = base._required_env("DEFAULT_FROM_EMAIL")
+try:
+    validate_email(DEFAULT_FROM_EMAIL)
+except ValidationError:
+    raise ImproperlyConfigured(
+        "DEFAULT_FROM_EMAIL은 유효한 이메일이어야 합니다."
+    ) from None
+try:
+    SES_MAX_SEND_RATE = float(base._required_env("SES_MAX_SEND_RATE"))
+except ValueError:
+    raise ImproperlyConfigured("SES_MAX_SEND_RATE는 양수여야 합니다.") from None
+if not math.isfinite(SES_MAX_SEND_RATE) or SES_MAX_SEND_RATE <= 0:
+    raise ImproperlyConfigured("SES_MAX_SEND_RATE는 유한한 양수여야 합니다.")
+MAILERS = {"default": {"BACKEND": "django_ses.SESBackend"}}
+NOTIFICATION_MODE = "ses"
+USE_SES_V2 = True
+AWS_SES_AUTO_THROTTLE = None
+# worker 공통 DB 예산과 오류 분류가 전송 횟수를 제어하도록 SDK의 내부 재시도를 막는다.
+AWS_SES_CONFIG = Config(
+    connect_timeout=5, read_timeout=15, retries={"total_max_attempts": 1}
+)

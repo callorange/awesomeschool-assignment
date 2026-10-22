@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "django_q",
     "education.apps.EducationConfig",
 ]
 
@@ -151,9 +152,32 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-# 개발 중 실제 메일 발송을 방지하며, 자동 안내 메일 기능은 후속 구현에서 결정한다.
 MAILERS = {
     "default": {
-        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+        "BACKEND": "django.core.mail.backends.locmem.EmailBackend",
     },
+}
+DEFAULT_FROM_EMAIL = "no-reply@example.invalid"
+NOTIFICATION_MODE = "simulated"
+# retry는 실행 제한보다 길게 두고 내부 대기량을 줄여 정상 작업의 조기 재전달을 피한다.
+Q_CLUSTER = {
+    "name": "default",
+    "orm": "default",
+    "workers": 2,
+    "bulk": 1,
+    "queue_limit": 2,
+    "timeout": 60,
+    "retry": 300,
+    "max_attempts": 3,
+    # 메일은 DB 상태로 재시도하고 이미지 작업만 ack_failure=False로 제한 재전달한다.
+    "ack_failures": True,
+    "catch_up": False,
+}
+
+# SES backend는 debug 로그에도 수신자를 넣으므로 업무 기록의 안전한 코드만 사용한다.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"null": {"class": "logging.NullHandler"}},
+    "loggers": {"django_ses": {"handlers": ["null"], "propagate": False}},
 }

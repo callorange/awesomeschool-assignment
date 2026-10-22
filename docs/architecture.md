@@ -37,6 +37,13 @@
 
 ## 백그라운드 task 구성
 
+함수 분리의 공통 판단 기준은 [함수 분리와 실행 흐름의 가독성](development.md#함수-분리와-실행-흐름의-가독성)을 따릅니다. task에는 다음 배치·의존성 규칙을 적용합니다.
+
+- `tasks.py`에는 실제 task 진입점과 실행 흐름을 둡니다.
+- 긴 task의 내부 처리를 분리할 필요가 있을 때만 `tasks_support/<업무 목적>_<처리 단계>.py`를 사용합니다. `tasks_support/`를 범용 유틸리티 저장소로 사용하지 않으며 짧은 task는 자체 구현을 유지합니다.
+- 지원 모듈은 `tasks.py`를 역으로 import하지 않으며 import 시 작업 등록·외부 호출을 수행하지 않습니다.
+- task 경로를 변경할 때는 생산 코드뿐 아니라 영속 스케줄·대기 작업·실패 작업 재등록에 미치는 영향도 확인합니다. 적용 중인 큐 시스템에 맞는 전환 절차와 검증을 포함합니다.
+
 현재 education 앱의 `tasks_support/consultation_reminder_dispatch.py`는 상담 안내 이메일의 오래된 상태 복구·대상 잠금·배치 등록을, `consultation_reminder_delivery.py`는 전송 처리권·공유 예산·결과 기록·메일 생성·SES 오류 분류를 담당합니다. 공유 안전 예외는 `tasks_support/exceptions.py`에 두고 짧은 이미지 참조 검사·삭제는 task 안에 유지합니다.
 
 ## 환경과 패키지 관리

@@ -16,7 +16,7 @@
 | 문서 | 역할과 적용 범위 |
 | --- | --- |
 | [아키텍처와 기술 선택](architecture.md) | 프로젝트 구조, 백그라운드 task 구성, template·static·프리셋·미디어 배치, 패키지·환경·DB 구성 원칙 |
-| [개발 규약](development.md) | 위험에 따른 검증·코드 문서화, Tailwind·프리셋 변경 기준, Git·OpenSpec 기록 관리 |
+| [개발 규약](development.md) | 위험에 따른 검증·코드 문서화, 함수 분리·명명 기준, Tailwind·프리셋 변경 기준, Git·OpenSpec 기록 관리 |
 | [Celery와 Django Q2 기능 비교](task-queue-comparison.md) | 큐·cluster·worker·재시도·종료 기능 비교와 백그라운드 작업 도구 선택 기록 |
 
 ## 작업별 참조

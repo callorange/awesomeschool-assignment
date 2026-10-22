@@ -170,7 +170,7 @@ uv run ruff format --check .
 
 ## AI 도구 활용·추가 문서
 
-Codex로 구현·테스트·문서 정리를 보조했습니다. OpenSpec으로 변경 의도와 작업을 관리하고, Django skill·GitNexus·ponytail을 코딩 기준·구조 탐색·과도한 추상화 방지에 활용했습니다. 최종 범위와 검증 결과는 이 저장소의 코드·테스트·문서에 기록했습니다.
+Codex로 구현·테스트·문서 정리를 보조했습니다. OpenSpec으로 변경 의도와 작업을 관리하고, Django skill·ponytail을 코딩 기준과 과도한 추상화 방지에 활용했습니다. GitNexus는 코드 인덱스 관리에 사용했습니다. 최종 범위와 검증 결과는 이 저장소의 코드·테스트·문서에 기록했습니다.
 
 - [기능 검증 가이드](docs/guides/verification.md): 기능별 예상 결과·API 계약·장애 재현·콘텐츠 출처
 - [운영 가이드](docs/guides/operations.md): 이메일·이미지 처리 정책·AWS 설정·문제 해결

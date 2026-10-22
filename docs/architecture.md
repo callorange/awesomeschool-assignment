@@ -52,16 +52,7 @@ uv는 `[tool.uv] package = false`인 비패키지 방식으로 사용합니다. 
 
 공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
 
-새 Django 프로젝트와 앱의 기본 골격은 LLM이 직접 작성하지 않고 Django의 `startproject`·`startapp` 명령으로 생성한 뒤 필요한 설정을 편집합니다. 기존 Django 기본 파일은 다음 명령으로 생성했습니다. 새 checkout에서 다시 실행하거나 기존 생성 파일을 덮어쓰는 명령이 아닙니다.
-
-```powershell
-New-Item -ItemType Directory src
-uv run django-admin startproject config src
-New-Item -ItemType Directory src/education
-uv run django-admin startapp education src/education
-```
-
-생성 결과에서 앱 등록과 프로젝트 설정만 조정합니다. Django 기본 인증·admin·CSRF middleware를 유지합니다. `tests.py`는 `tests/` 패키지로 전환했으며 두 모듈을 함께 두지 않습니다.
+새 Django 프로젝트와 앱의 기본 골격은 LLM이 직접 작성하지 않고 Django의 `startproject`·`startapp` 명령으로 생성한 뒤 필요한 설정을 편집합니다. Django 기본 인증·admin·CSRF middleware를 유지합니다. 테스트는 앱의 `tests/` 패키지에 두며 같은 앱에 `tests.py`를 함께 두지 않습니다.
 
 설정은 `src/config/settings/base.py`(공통), `dev.py`(로컬 미디어), `prod.py`(S3·CloudFront)로 분리합니다. manage.py·ASGI·WSGI의 기본은 `config.settings.dev`이며 프로세스에 지정한 `DJANGO_SETTINGS_MODULE`을 보존합니다. 운영은 `config.settings.prod`를 프로세스 환경이나 관리 명령의 `--settings`로 명시합니다. `.env`를 읽기 전에 모듈이 선택되므로 `.env`에 설정 모듈을 적어 자동 전환하지 않습니다. Django 설정은 django-environ으로 저장소 루트의 `.env`를 자동 로딩하며, 이미 주입된 환경 변수를 우선한다. `.env`가 없어도 필요한 환경 변수를 직접 주입하면 실행할 수 있습니다. uv의 `--env-file`은 중복 사용하지 않습니다. secret key, DB 이름·사용자·비밀번호가 없거나 비어 있으면 값 노출 없이 설정 오류로 중단합니다. DEBUG 기본값은 false이며 django-environ의 boolean 해석을 따릅니다(`true`/`1`/`yes`/`on`/`y`/`ok`는 true, 대소문자와 앞뒤 공백 무시). 허용 host는 목록으로 읽은 뒤 각 항목의 공백과 빈 항목을 제거합니다. 로컬 예제는 DEBUG=true와 loopback host를 사용합니다. 언어는 한국어, 시간대는 `Asia/Seoul`, timezone-aware datetime을 사용합니다.
 
@@ -79,7 +70,7 @@ Education은 교육명·소개·미디어 FileField·목표·대상·시수별 �
 
 프리셋 JSON과 이미지 원본은 앱의 실행 코드와 분리해 저장소 루트 `presets/education/`에 보관합니다. 초기화 명령은 `src/education/management/commands/`에 유지하고 Django `BASE_DIR`의 상위인 저장소 루트를 기준으로 프리셋을 찾습니다. 초기화를 실행할 배포물에도 이 폴더를 포함해야 합니다. 프리셋 원본은 Git으로 관리하며 직접 제공하는 static이나 실행 중 업로드 저장소로 사용하지 않습니다. `seed_educations`는 사전 검증 후 누락 교육만 추가하고 기존 교육의 운영 정보와 이미지를 보존합니다. source_url·source_image_url·collected_on·editorial_note는 프리셋 JSON에만 보관하고 초기화 시 DB 저장 대상에서 제외합니다. 신규 프리셋의 진행 안내는 과제용 정책임을 JSON의 편집 설명에 명시하며 상세 화면에는 수집 기록을 표시하지 않습니다. 저장소가 반환한 실제 이름을 DB에 기록합니다. DB 오류 시 transaction은 롤백되지만 파일은 남을 수 있으므로 자동 삭제하지 않고 재실행에서 재사용합니다.
 
-신규 교육 이미지의 저장 키는 `education/<media_id의 32자 hex>/images/<filename>`입니다. `media_id`는 `UUIDField(default=uuid7, unique=True, editable=False)`로 생성 전에 부여하며 교육 생성 후 변경하지 않습니다. 기존 숫자 PK와 상세 URL의 slug는 유지합니다. UUIDv7은 Django의 Python 기본값으로 생성하며 DB 기본값은 두지 않습니다. 프리셋에는 교육별 고정 UUIDv7을 기록하고 형식·버전·중복을 쓰기 전에 검증합니다. 일반 FileField 파일 저장은 `education/media.py`의 upload_to callable에서 UUID 파일명과 원본 확장자를 사용합니다. 프리셋은 실패 후 재사용할 수 있도록 SHA256 내용 해시와 `.png`를 사용합니다. 로컬·S3 모두 덮어쓰기를 허용하지 않습니다. 기존 `education/presets/` 등의 키는 자동 이동하지 않으며 slug만 바꿔도 기존 파일 키는 유지합니다. 경로 함수는 migration에서도 참조하므로 import 경로를 유지합니다. 현재 개발 이력은 0001을 유지하고 후속 파일을 삭제한 뒤 Django makemigrations로 생성한 단일 0002로 정리했습니다. 사용자 요청으로 로컬 Compose DB 컨테이너·볼륨을 삭제하고 빈 DB에서 0001 → 0002 → 프리셋 순으로 검증했습니다. 0002는 수집 기록 열 제거와 UUID 고유 필드 추가를 포함하며 기존 데이터가 있는 DB의 무중단 업그레이드용이 아닙니다. 생성 migration에 수동 DDL·잠금 제한은 추가하지 않았습니다.
+신규 교육 이미지의 저장 키는 `education/<media_id의 32자 hex>/images/<filename>`입니다. `media_id`는 `UUIDField(default=uuid7, unique=True, editable=False)`로 생성 전에 부여하며 교육 생성 후 변경하지 않습니다. 기존 숫자 PK와 상세 URL의 slug는 유지합니다. UUIDv7은 Django의 Python 기본값으로 생성하며 DB 기본값은 두지 않습니다. 프리셋에는 교육별 고정 UUIDv7을 기록하고 형식·버전·중복을 쓰기 전에 검증합니다. 일반 FileField 파일 저장은 `education/media.py`의 upload_to callable에서 UUID 파일명과 원본 확장자를 사용합니다. 프리셋은 실패 후 재사용할 수 있도록 SHA256 내용 해시와 `.png`를 사용합니다. 로컬·S3 모두 덮어쓰기를 허용하지 않습니다. 기존 `education/presets/` 등의 키는 자동 이동하지 않으며 slug만 바꿔도 기존 파일 키는 유지합니다. 경로 함수는 migration에서도 참조하므로 import 경로를 유지합니다. 교육 schema는 빈 DB 초기 구성을 기준으로 하며 수집 기록 열 제거와 UUID 고유 필드 추가를 포함합니다. 기존 데이터가 있는 DB의 무중단 업그레이드는 별도 전환 설계가 필요합니다. 마이그레이션 정리 기준은 [개발 규약](development.md#마이그레이션-변경과-이력-정리)을 따릅니다.
 
 교육 단일·일괄 삭제와 일반 `save()`의 이미지 교체는 `education/signals.py`에서 이전 키를 수집하고 같은 DB transaction 안에 Q2 ORM 작업을 기록합니다. 일반 save는 post_save까지 atomic 경계에 포함하며 삭제는 Django의 deletion transaction을 사용합니다. commit 후 worker가 default Storage와 같은 DB alias에서 참조를 재확인해 미참조 파일만 삭제하므로 rollback·공유·재연결 파일을 보존합니다. 같은 키·image 제외 저장은 정리하지 않으며 `QuerySet.update()`·`bulk_update()`·직접 SQL은 signal을 우회합니다.
 
@@ -87,7 +78,7 @@ Education은 교육명·소개·미디어 FileField·목표·대상·시수별 �
 
 ## 신청과 자동 안내의 경계
 
-신청 관련 schema는 기존 0001/0002를 유지한 단일 추가 migration 0003으로 생성합니다. 새 신청·안내·시도·공유 예산 테이블과 제약·인덱스, 모델·필드의 표시명·도움말을 함께 포함하며 교육 데이터·기존 열·미디어 키를 변환하거나 초기화하지 않습니다.
+신청 관련 schema는 신청·안내·전송 시도·공유 발송 예산을 각각 저장하고 무결성을 위한 제약·인덱스를 둡니다. 신청 기능 도입은 기존 교육 데이터와 미디어 키의 변환·초기화를 요구하지 않습니다.
 
 Application은 request_id의 DB unique 제약과 교육 row lock으로 동일 제출을 재사용하며 신청 당시 slug·교육명 snapshot과 개인정보를 보관합니다. 교육 삭제는 SET_NULL이며 신청·안내를 지우지 않습니다. 공개 API는 교육 GET과 CSRF를 검사하는 익명 신청 POST만 제공하고 응답은 request_id·접수 상태로 제한합니다. 교육의 접수 중단·삭제·날짜 경과 전후에도 기존 제출 확인은 새 접수 검증과 구분합니다.
 

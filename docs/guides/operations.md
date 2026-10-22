@@ -106,21 +106,15 @@ uv run --no-sync python src/manage.py notification_status --settings=config.sett
 
 QuerySet.update·bulk_update·직접 SQL은 signal을 우회합니다. 새 파일 저장 후 DB rollback·프로세스 중단으로 고아 파일이 남을 수 있으며 전수 청소·프리셋 원본 삭제·별도 DLQ는 제공하지 않습니다. 초기화 실패 파일 재사용과 이미지 실패 재등록 시 참조 검사는 유지합니다.
 
-## 기존 task 경로 전환
+## task 경로 변경 시 운영 절차
 
-신규 checkout은 해당 작업이 필요 없습니다. 이전 코드로 등록된 스케줄·큐가 있는 환경만 확인합니다.
+Q2는 함수 경로를 스케줄·큐·실패 기록에 저장합니다. task 함수나 모듈 경로를 변경할 때는 해당 경로를 사용하는 영속 작업이 있는 환경에서 다음 절차를 적용합니다.
 
-| 이전 경로 | 현재 경로 |
-| --- | --- |
-| education.tasks.dispatch_notifications | education.tasks.enqueue_consultation_reminder_emails |
-| education.tasks.send_notification | education.tasks.send_consultation_reminder_email |
-| education.tasks.cleanup_image | education.tasks.delete_unreferenced_education_image |
-
-1. 스케줄·큐·실행 작업을 확인합니다. 옛 경로 작업이 남아 있으면 신규 등록을 멈춥니다. 주기 스케줄은 admin의 repeats=0으로 중지하고 웹의 이미지 변경·삭제 등도 중단합니다.
+1. 스케줄·큐·실행 작업을 확인하고 변경 대상 작업의 신규 등록을 멈춥니다. 주기 스케줄은 admin의 repeats=0으로 중지하며 웹 요청 등 다른 등록 경로도 제어합니다.
 2. 기존 코드의 worker로 대기·실행 작업과 결과 저장을 마친 뒤 정상 종료합니다. 서명된 큐 payload를 편집하거나 작업·신청·발송 이력을 지우지 않습니다.
-3. 새 코드를 배치하고 같은 환경의 `configure_background_tasks`를 실행합니다. 스케줄 row·next_run은 유지하고 새 함수 경로·5분 간격·무제한 반복·default cluster를 적용합니다. 이후 worker·신규 등록을 재개합니다.
+3. 새 코드를 배치하고 영속 스케줄이 새 함수 경로를 참조하도록 갱신합니다. 상담 안내 스케줄은 `configure_background_tasks`로 갱신할 수 있으며 row·next_run을 유지하되 주기·반복·cluster를 기본값으로 설정하므로 운영 설정을 확인합니다. 이후 worker·신규 등록을 재개합니다.
 
-옛 함수 alias·범용 큐 변환기는 제공하지 않습니다. 과거 이미지 실패는 원인을 해결한 뒤 현재 이미지 task 경로와 기존 args·kwargs, ack_failure=False로 재등록합니다. 이전 func를 그대로 재사용하지 않습니다. 메일 실패·unknown은 이름 변경을 이유로 수동 재발송하지 않습니다.
+실패한 이미지 작업을 다시 등록할 때는 원인을 해결하고 유효한 현재 task 경로와 원래 args·kwargs, ack_failure=False를 사용합니다. 재등록 작업도 현재 이미지 참조를 검사해야 합니다. 메일 실패·unknown은 경로 변경을 이유로 수동 재발송하지 않습니다.
 
 ## 로컬 문제 해결·화면 자산 수정
 

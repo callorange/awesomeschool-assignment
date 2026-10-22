@@ -3,7 +3,7 @@
 교육 소개를 확인한 방문자가 상담을 신청하고, 연락 가능 날짜에 안내를 받는 Django 사전 과제입니다.
 신청은 수강 확정이 아닌 **상담 접수**로 해석했습니다. 연락 가능 날짜도 교육 희망일과 구분합니다.
 
-[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
+[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [백오피스](#담당자용-백오피스) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
 
 ## 구현 범위
 
@@ -138,6 +138,7 @@ flowchart LR
 | --- | --- |
 | Templates·Tailwind·Axios | 단일 Django 서버에서 반응형 화면과 비동기 신청을 제공하고 별도 프론트 서버를 줄였습니다. |
 | 교육정보 GET·신청 POST | GET은 선택 교육 안내에 사용하고 신청 개인정보 조회는 공개하지 않았습니다. |
+| 백오피스·기본 admin 병행 | 담당자는 신청·상담 업무에 집중하고 교육·권한·이력·task는 admin에서 확인합니다. 계정·권한·저장 규칙을 공유해 두 화면의 동작을 일치시켰습니다. |
 | 제출 UUID·DB 고유 제약 | 응답 유실 후 같은 입력·ID로 재시도해도 접수와 안내 대상을 중복 생성하지 않습니다. |
 | Q2·PostgreSQL 기본 큐 | 기존 DB를 활용해 별도 Redis 없이 날짜별 안내와 이미지 정리를 요청 처리에서 분리했습니다. |
 | 발송 시도 기록·처리권 | 동시 발송을 제어하고 미접수가 확실한 오류만 재시도합니다. 결과 불명은 `unknown`으로 보존해 자동 재발송을 막습니다. |
@@ -152,12 +153,14 @@ Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/
 ```text
 src/
     config/             # base/dev/prod 설정·프로젝트 진입점
-    education/          # 모델·DRF API·페이지·관리 명령·테스트
-        forms/          # 교육·신청·상담별 admin 입력 폼
+    education/          # 모델·공개 DRF API·페이지·관리 명령·테스트
+        backoffice.py   # 담당자용 화면·업무 저장·이메일 상태 부분 조회
+        backoffice_urls.py # /backoffice/ 전용 URL
+        forms/          # 교육·신청·상담의 admin·백오피스 입력 폼
         services/       # 신청 변경 검증·신청/이력/안내의 transaction 저장
         tasks/          # Q2 진입점·메일 처리 단계·이미지 정리
         migrations/     # 전체 모델을 생성하는 0001_initial.py
-    templates/          # 공통 layout·교육/신청 화면·메일 본문·admin 위젯
+    templates/          # 공개 화면·백오피스 layout·메일 본문·admin 위젯
     static/             # 빌드 CSS·Axios 포함 JS·source map·라이선스 고지
 presets/education/      # 교육 3개의 초기 데이터·이미지 원본
 frontend/              # 입력 CSS·직접 편집하는 JavaScript
@@ -185,6 +188,6 @@ uv run ruff format --check .
 
 Codex로 구현·테스트·문서 정리를 보조했습니다. OpenSpec으로 변경 의도와 작업을 관리하고, Django skill·ponytail을 코딩 기준과 과도한 추상화 방지에 활용했습니다. GitNexus는 코드 인덱스 관리에 사용했습니다. 최종 범위와 검증 결과는 이 저장소의 코드·테스트·문서에 기록했습니다.
 
-- [기능 검증 가이드](docs/guides/verification.md): 기능별 예상 결과·API 계약·장애 재현·콘텐츠 출처
-- [운영 가이드](docs/guides/operations.md): 이메일·이미지 처리 정책·AWS 설정·문제 해결
+- [기능 검증 가이드](docs/guides/verification.md): 공개 화면·백오피스·admin 확인·API 계약·검증 기록
+- [운영 가이드](docs/guides/operations.md): 백오피스 계정·권한·오류 대응·이메일/이미지 정책·AWS 설정
 - [문서 안내](docs/README.md): 과제 검토 자료와 개발·유지보수 거버넌스 구분

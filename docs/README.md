@@ -7,15 +7,15 @@
 | 문서 | 읽는 목적 |
 | --- | --- |
 | [프로젝트 README](../README.md) | 개요·구현 범위·Bash 실행 순서·설계 의도·폴더 구조·AI 도구 활용 |
-| [기능 검증 가이드](guides/verification.md) | 화면별 예상 결과·개발 모의 메일·API·장애 재현·검증 한계·콘텐츠 출처 |
-| [운영 가이드](guides/operations.md) | 환경별 backend·메일/이미지 정책·worker 종료·task 경로 호환·초기 migration과 DB 준비 |
+| [기능 검증 가이드](guides/verification.md) | 공개 화면·백오피스·admin 확인, 개발 모의 메일·API·장애 재현·검증 한계·콘텐츠 출처 |
+| [운영 가이드](guides/operations.md) | 백오피스 계정·권한·오류 대응, 환경별 backend·메일/이미지 정책·worker 종료·초기 DB 준비 |
 | [과제 원문](awesomeschool-assignment.md) | 제출받은 요구사항 원문 |
 
 ## 개발·유지보수 문서
 
 | 문서 | 역할과 적용 범위 |
 | --- | --- |
-| [아키텍처와 기술 선택](architecture.md) | 모델별 책임, forms·services·tasks 구조, admin 위젯·정적 자산·프리셋 배치, 환경·DB 구성 원칙 |
+| [아키텍처와 기술 선택](architecture.md) | 모델별 책임, 백오피스 인증·저장·부분 조회, forms·services·tasks 구조, 정적 자산·프리셋·환경·DB 구성 |
 | [개발 규약](development.md) | 위험에 따른 검증·코드 문서화, 함수 분리·명명과 마이그레이션 정리 기준, Tailwind·프리셋 변경 기준, Git·OpenSpec 기록 관리 |
 | [Celery와 Django Q2 기능 비교](task-queue-comparison.md) | 큐·cluster·worker·재시도·종료 기능 비교와 백그라운드 작업 도구 선택 기록 |
 

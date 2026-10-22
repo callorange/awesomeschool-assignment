@@ -29,10 +29,11 @@ Ruff는 Python 3.14를 대상으로 프로젝트 소유 코드만 검사합니�
 
 - 프로젝트 template와 static은 `src/templates/`와 `src/static/`에 통합하고, template는 기능별 하위 폴더로 구분합니다. 공통 layout은 `src/templates/base.html`을 사용합니다. 앱 내부에 프로젝트 소유 template·static 폴더를 새로 분산하지 않습니다.
 - 스타일은 현재의 npm 기반 Tailwind CSS CLI로 작성합니다. `frontend/styles.css`가 입력이고 `src/static/css/site.css`가 생성물입니다. 클래스는 template에 완전한 문자열로 작성합니다.
-- 개발 도구와 배포 자산 의존성은 `npm ci`로 설치합니다. `npm run build:css`로 빌드하고 `npm run watch:css`로 변경을 감시합니다. `npm run vendor:axios`로 lockfile에 고정한 Axios ESM 파일·source map·라이선스를 `src/static/vendor/axios/`에 복사합니다. 생성 자산·package-lock·관련 template를 같은 작업에 포함하며 생성 파일을 직접 편집하지 않습니다.
-- 로컬·평가 실행은 저장소의 CSS·Axios 자산을 사용하며 Node.js·외부 Axios CDN·Tailwind CDN·외부 글꼴을 요구하지 않습니다. Tailwind는 npm 개발 도구이고 Axios는 브라우저 배포 자산 의존성입니다. 둘 다 Django 운영 서버에서 npm 설치·실행을 요구하지 않습니다.
+- 개발 도구와 브라우저 의존성은 `npm ci`로 설치하고 `npm run build`로 CSS·JavaScript를 함께 생성합니다. JavaScript 진입 파일은 `frontend/entries/*.js`에 두고 npm 패키지를 이름으로 import합니다. esbuild는 진입 파일별 JS와 source map·라이선스 고지를 `src/static/js/`에 생성하고 여러 진입 파일이 공유하는 코드는 `chunks/`로 분리합니다. 새 진입 파일은 같은 빌드 명령에 자동 포함되며 실제 로딩은 해당 template에서 명시합니다. 배치·로딩 기준은 [JavaScript 진입점과 페이지별 로딩](architecture.md#javascript-진입점과-페이지별-로딩)을 따릅니다. 생성 자산·package-lock·관련 template를 같은 작업에 포함하며 생성 파일을 직접 편집하지 않습니다.
+- CSS·JavaScript만 다시 빌드할 때는 `npm run build:css`·`npm run build:js`, 변경 감시는 각각 `npm run watch:css`·`npm run watch:js`를 사용합니다. 두 감시 명령은 별도 터미널에서 실행합니다. 의존성을 추가할 때 필요한 라이선스 고지를 소스의 legal comment에 보존하고 생성된 JS·공유 chunk에 대응하는 `.LEGAL.txt`를 함께 배포합니다.
+- 로컬·평가 실행은 저장소의 CSS·JS 번들을 사용하며 Node.js·외부 Axios CDN·Tailwind CDN·외부 글꼴을 요구하지 않습니다. Tailwind·esbuild는 개발 도구이고 Axios는 번들에 포함되는 브라우저 의존성입니다. Django 운영 서버에서 npm 설치·실행을 요구하지 않습니다.
 - 랜딩·교육 상세·신청을 360px·390px·768px·1280px에서 확인합니다. 카드 1·2·3열, 본문·커리큘럼·폼 잘림과 가로 스크롤, 이미지 비율, 키보드 포커스와 터치 영역을 검증합니다. 반응형 검증을 HTML 렌더링 테스트로 대체하지 않고 Android Chrome·iOS Safari 실기기 확인 여부를 별도로 기록합니다.
-- 빌드 재현성은 같은 lockfile로 CSS를 재빌드해 산출물의 hash를 비교합니다. CSS와 이미지의 HTTP 200도 실제 서버에서 확인합니다.
+- 빌드 재현성은 같은 lockfile로 CSS·JS·source map·라이선스 고지를 재빌드해 산출물의 hash를 비교합니다. CSS·JS·이미지의 HTTP 200과 브라우저의 신청 동작도 실제 서버에서 확인합니다.
 
 ## 마이그레이션 변경과 이력 정리
 

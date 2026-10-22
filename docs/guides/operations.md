@@ -134,12 +134,11 @@ uv run python src/manage.py findstatic css/site.css --verbosity 2
 
 로컬 staticfiles는 DEBUG runserver가 프로젝트·설치 앱의 자산을 찾아 제공합니다. 따라서 로컬은 collectstatic 없이 관리자 CSS도 표시합니다. 이는 운영용 static 배포가 아닙니다.
 
-평가 실행에는 Node.js가 필요 없습니다. 화면·Axios 자산을 수정하는 개발자만 다음 명령을 사용합니다. 저장소에 생성물과 lockfile을 함께 반영하며 생성 CSS·vendor 파일을 직접 편집하지 않습니다.
+평가 실행에는 Node.js가 필요 없습니다. 화면 자산을 수정하는 개발자는 Node.js 20 이상에서 다음 명령을 사용합니다. `frontend/styles.css`·`frontend/entries/`의 JavaScript를 편집하고 저장소에 생성물과 lockfile을 함께 반영하며 `src/static/`의 빌드 결과물을 직접 편집하지 않습니다.
 
 ```bash
 npm ci
-npm run vendor:axios
-npm run build:css
+npm run build
 ```
 
-CSS 변경 감시는 `npm run watch:css`입니다. 빌드·배포 자산의 상세 규칙은 [개발 규약](../development.md#tailwind-css와-화면-검증)을 따릅니다. 종료는 `docker compose down`으로 데이터를 보존하며 volume을 삭제하지 않습니다.
+통합 빌드는 CSS와 진입점별 JS·필요한 공통 chunk·source map·라이선스 고지를 생성합니다. JavaScript 패키지는 필요한 소스에서 import하고, 새 페이지는 `frontend/entries/`에 진입 파일을 추가한 뒤 해당 template에서만 로드합니다. 둘 다 같은 `npm run build`를 사용합니다. 파일 배치와 전체·영역·페이지별 로딩은 [아키텍처](../architecture.md#javascript-진입점과-페이지별-로딩)를 따릅니다. CSS 변경 감시는 `npm run watch:css`, JavaScript는 별도 터미널의 `npm run watch:js`입니다. 빌드·배포 자산의 상세 규칙은 [개발 규약](../development.md#tailwind-css와-화면-검증)을 따릅니다. 종료는 `docker compose down`으로 데이터를 보존하며 volume을 삭제하지 않습니다.

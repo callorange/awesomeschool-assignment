@@ -1,6 +1,6 @@
 # 아키텍처와 기술 선택
 
-교육 소개 → 신청 접수 → 신청 관리라는 하나의 흐름을 단일 Django 프로젝트에서 구현합니다. 교육 소개·상담 신청은 Django Templates와 Tailwind CSS로 제공하고 신청 관리는 후속 범위입니다. 실행 명령과 구현 상태는 [README](../README.md), 원래 요구사항은 [과제 문서](awesomeschool-assignment.md)를 기준으로 합니다.
+교육 소개 → 신청 접수 → 신청 관리라는 하나의 흐름을 단일 Django 프로젝트에서 구현합니다. 교육 소개·상담 신청은 Django Templates와 Tailwind CSS로 제공하고 신청 관리는 기본 Django admin으로 제공합니다. 실행 명령과 구현 상태는 [README](../README.md), 원래 요구사항은 [과제 문서](awesomeschool-assignment.md)를 기준으로 합니다.
 
 ## 프로젝트 구조
 
@@ -11,7 +11,10 @@
 | `src/manage.py` | Django 관리 명령 진입점 |
 | `src/config/` | 설정·URL·ASGI·WSGI 진입점 |
 | `src/education/` | 교육·신청·안내 모델, 공개 API·화면, 메일·이미지 작업과 관리 명령 |
-| `src/education/migrations/` | 교육 모델의 DB schema 변경 이력 |
+| `src/education/forms/` | 교육·신청·상담별 admin 입력 폼과 교육 콘텐츠 위젯 |
+| `src/education/services/applications.py` | 신청 변경 검증과 신청·이력·안내의 transaction 저장 |
+| `src/education/tasks/` | 기존 Q2 함수 경로 공개·안내 등록/발송·메일 처리 단계·이미지 정리 |
+| `src/education/migrations/0001_initial.py` | 전체 모델을 빈 DB에 생성하는 초기 migration |
 | `src/templates/` | 공통 layout과 기능별 template를 담는 통합 폴더 |
 | `src/static/` | 빌드 CSS·JS·source map·라이선스 고지 등 배포 정적 자산을 담는 통합 폴더 |
 | `frontend/`, `package.json`, `package-lock.json` | CSS·JavaScript 소스, 통합 빌드 명령·의존성 설치 조합 |
@@ -25,39 +28,41 @@
 
 ## JavaScript 진입점과 페이지별 로딩
 
-- `frontend/entries/*.js`는 브라우저가 시작점으로 로드할 파일입니다. 현재 신청 전용 진입점은 `application.js`입니다. 전체 공통·백오피스 공통·다른 페이지의 진입점은 실제 기능이 생길 때 추가합니다.
+- `frontend/entries/*.js`는 브라우저가 시작점으로 로드할 파일입니다. 신청 전용 진입점은 `application.js`, 교육 admin의 교시 추가는 `education-admin.js`입니다. 전체 공통·백오피스 공통·다른 페이지의 진입점은 실제 기능이 생길 때 추가합니다.
 - 여러 진입점에서 재사용하는 모듈은 필요할 때 `frontend/shared/`에 두고 import합니다. 이 폴더의 모듈은 직접 로드할 진입 파일로 빌드하지 않습니다.
-- `npm run build`는 모든 진입점을 함께 빌드하되, 각 template은 필요한 진입 파일만 `type="module"`로 로드합니다. 전체 공통 기능은 `base.html`의 `common_scripts`, 백오피스 등 영역 공통 기능은 해당 영역 base template의 `section_scripts`, 페이지 전용 기능은 해당 페이지의 `scripts` 블록에 둡니다. 현재 공통 블록은 비어 있으며 신청 페이지에서만 `application.js`를 로드합니다.
+- `npm run build`는 모든 진입점을 함께 빌드합니다. 공개 화면은 필요한 진입 파일을 `type="module"`로 로드합니다. 전체 공통 기능은 `base.html`의 `common_scripts`, 영역 공통 기능은 해당 영역 base template의 `section_scripts`, 페이지 전용 기능은 해당 페이지의 `scripts` 블록에 둡니다. 현재 공통 블록은 비어 있으며 신청 페이지에서 `application.js`를 로드합니다.
+- Django admin은 공개 화면의 base template를 사용하지 않습니다. 교육 커리큘럼 위젯의 `Media.js`가 `education-admin.js`를 admin 폼에 로드합니다. 이 진입점은 외부 모듈 import 없이 실행되는 단일 번들이며 admin의 기본 CSS·JavaScript는 유지합니다.
 - Axios 등 라이브러리를 사용하는 진입점만 해당 라이브러리를 import합니다. esbuild는 여러 진입점의 공통 의존성을 `src/static/js/chunks/`에 분리하고 생성된 import로 연결하므로 template에서 chunk 경로를 직접 지정하지 않습니다.
 
 ## 기술 선택
 
 - **Python 3.14 / Django 6.1.2**: 기존 호환성 제약이 없는 신규 프로젝트의 기준입니다. Django를 `6.1.2`로 고정하고 lockfile로 정확한 설치 조합을 재현합니다. 장기 운영 시 Django 6.1 지원 종료 전에 업그레이드하며 보안 패치를 계속 확인합니다.
-- **DRF**: 과제에서 지정한 API 프레임워크입니다. 교육정보 GET·신청 POST를 제공하며 관리자 전용 신청 조회는 후속 범위입니다.
+- **DRF**: 과제에서 지정한 API 프레임워크입니다. 공개 교육정보 GET·신청 POST를 제공합니다. 신청 조회·관리는 기본 admin에서 처리하며 별도 관리자 API는 제공하지 않습니다.
 - **PostgreSQL 18.6 / Psycopg 3**: 개발·테스트 DB를 통일합니다. SQLite 대체 경로는 두지 않습니다. `postgres:18.6-bookworm`을 사용하고 volume은 `/var/lib/postgresql`에 마운트합니다.
 - **Django Templates / Tailwind CSS / Axios**: 랜딩·교육 상세·신청 화면을 단일 서버에서 제공합니다. Tailwind CSS CLI와 esbuild를 `npm run build`로 실행해 CSS와 Axios를 포함한 JS 번들을 생성합니다. 직접 편집하는 소스는 `frontend/`, 배포 산출물은 `src/static/`에 두고 source map·라이선스 고지와 함께 저장소에 포함하며 별도 프론트 서버·SPA·평가 실행 시 Node.js는 요구하지 않습니다. 주소 검색은 Kakao 공식 SDK를 요청할 때만 로딩하고 직접 입력 대안을 유지합니다.
-- **Django admin**: MVP의 신청 CRUD와 상태 관리 화면으로 사용할 예정입니다. 별도 관리자 신청 목록 화면은 MVP 이후 항목입니다.
+- **Django admin**: 교육 등록·수정과 신청 조회·정정·상담·재연락·상태 관리에 사용합니다. 신청·상담은 삭제하지 않으며 안내·전송 시도·공유 예산은 조회 전용입니다. 별도 관리자 UI는 후속 범위입니다.
+- **django-simple-history 3.13**: 신청 정보·상태·다음 연락 예정의 변경자·시각·전후 값을 보존합니다. 신청에만 적용하며 최초 제출 snapshot은 중복 이력에서 제외합니다. 이력 복원은 제공하지 않습니다.
 - **django-environ**: 관리 명령·WSGI·ASGI가 같은 설정 로딩 경로를 사용하도록 Django 설정에서 `.env`를 읽고 boolean·목록을 해석합니다.
 - **uv / Ruff / Django test runner**: 런타임 의존성과 개발 의존성을 분리하고, 별도 테스트 프레임워크 없이 필요한 계약을 검증합니다.
 
-교육 소개와 신청은 같은 education 앱에서 제공합니다. API는 `api.py`·`serializers.py`, Q2 진입점과 실행 흐름은 `tasks.py`가 담당합니다. 단순 CRUD에 Service·Repository·Selector 계층을 강제하지 않습니다.
+교육 소개와 신청은 같은 education 앱에서 제공합니다. API는 `api.py`·`serializers.py`, Q2 진입점과 실행 흐름은 `tasks/` 패키지가 담당합니다. 단순 CRUD에 Service·Repository·Selector 계층을 강제하지 않습니다.
 
 ## 백그라운드 task 구성
 
 함수 분리의 공통 판단 기준은 [함수 분리와 실행 흐름의 가독성](development.md#함수-분리와-실행-흐름의-가독성)을 따릅니다. task에는 다음 배치·의존성 규칙을 적용합니다.
 
-- `tasks.py`에는 실제 task 진입점과 실행 흐름을 둡니다.
-- 긴 task의 내부 처리를 분리할 필요가 있을 때만 `tasks_support/<업무 목적>_<처리 단계>.py`를 사용합니다. `tasks_support/`를 범용 유틸리티 저장소로 사용하지 않으며 짧은 task는 자체 구현을 유지합니다.
-- 지원 모듈은 `tasks.py`를 역으로 import하지 않으며 import 시 작업 등록·외부 호출을 수행하지 않습니다.
+- `tasks/reminders.py`에는 상담 안내 등록·발송 진입점과 실행 흐름을, `tasks/media.py`에는 이미지 정리 task를 둡니다.
+- 긴 이메일 처리의 내부 단계는 같은 패키지의 `reminder_dispatch.py`·`reminder_delivery.py`로 분리하며 짧은 task는 자체 구현을 유지합니다.
+- `tasks/__init__.py`는 세 task 함수를 공개해 기존 `education.tasks.<함수명>` 경로를 유지합니다. 지원 모듈은 공개 패키지를 역으로 import하지 않고 필요한 하위 모듈을 직접 참조합니다. import 시 작업 등록·외부 호출은 수행하지 않습니다.
 - task 경로를 변경할 때는 생산 코드뿐 아니라 영속 스케줄·대기 작업·실패 작업 재등록에 미치는 영향도 확인합니다. 적용 중인 큐 시스템에 맞는 전환 절차와 검증을 포함합니다.
 
-현재 education 앱의 `tasks_support/consultation_reminder_dispatch.py`는 상담 안내 이메일의 오래된 상태 복구·대상 잠금·배치 등록을, `consultation_reminder_delivery.py`는 전송 처리권·공유 예산·결과 기록·메일 생성·SES 오류 분류를 담당합니다. 공유 안전 예외는 `tasks_support/exceptions.py`에 두고 짧은 이미지 참조 검사·삭제는 task 안에 유지합니다.
+현재 `tasks/reminder_dispatch.py`는 상담 안내 이메일의 오래된 상태 복구·대상 잠금·배치 등록을, `tasks/reminder_delivery.py`는 전송 처리권·공유 예산·결과 기록·메일 생성·SES 오류 분류를 담당합니다. 공유 안전 예외는 `tasks/exceptions.py`에 둡니다.
 
 ## 환경과 패키지 관리
 
 uv는 `[tool.uv] package = false`인 비패키지 방식으로 사용합니다. 애플리케이션 자체를 빌드·설치할 필요가 없으므로 `[build-system]`을 두지 않습니다. 배포용 Python 라이브러리의 build backend 규칙과 구분합니다.
 
-공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
+공통 실행 의존성은 Django, DRF, `psycopg[binary]`, `django-environ`, `django-q2`, `django-simple-history`입니다. `prod` 그룹에는 `django-storages[s3]`와 `django-ses`(events extra 제외), 기본 `dev` 그룹에는 `prod` 포함과 Ruff를 둡니다. local 그룹이나 별도 AWS extra는 만들지 않습니다. 로컬은 `uv sync --locked`, 운영은 `uv sync --locked --no-default-groups --group prod`로 설치합니다. 운영 설치 뒤 직접 가상환경 실행 또는 `uv run --no-sync`를 사용하며 `uv.lock`을 함께 관리합니다. 개발에서 AWS backend를 선택하거나 자격 증명을 조회하지 않습니다.
 
 새 Django 프로젝트와 앱의 기본 골격은 LLM이 직접 작성하지 않고 Django의 `startproject`·`startapp` 명령으로 생성한 뒤 필요한 설정을 편집합니다. Django 기본 인증·admin·CSRF middleware를 유지합니다. 테스트는 앱의 `tests/` 패키지에 두며 같은 앱에 `tests.py`를 함께 두지 않습니다.
 
@@ -71,13 +76,13 @@ Compose는 개발용 DB만 실행하고 포트를 loopback에만 공개합니다
 
 ## 교육 데이터와 프리셋
 
-Education은 교육명·소개·미디어 FileField·목표·대상·시수별 커리큘럼과 운영 정보를 보관합니다. `operation_type`은 `instructor_led`(코치 출강) 또는 `courseware`(코스웨어), `operation_note`는 선택적인 일반 텍스트 진행 안내, `is_accepting_inquiries`는 상담 접수 활성 여부입니다. 기존 교육에는 코치 출강·빈 안내·접수 활성 기본값을 적용하며 접수 중단도 소개를 숨기지는 않습니다. 지역·일정·인원은 협의 안내로 제공하고 기수·반·좌석 모델은 두지 않습니다.
+Education은 교육명·소개·미디어 FileField·목표·대상·시수별 커리큘럼과 운영 정보를 보관합니다. `operation_type`은 `instructor_led`(코치 출강) 또는 `courseware`(코스웨어), `operation_note`는 선택적인 일반 텍스트 진행 안내, `is_accepting_inquiries`는 상담 접수 활성 여부입니다. 운영 방식·진행 안내·접수 활성의 모델 기본값은 코치 출강·빈 문자열·활성이며 접수 중단도 소개를 숨기지는 않습니다. 지역·일정·인원은 협의 안내로 제공하고 기수·반·좌석 모델은 두지 않습니다.
 
-목표·대상과 커리큘럼은 JSONField를 사용하며 `education/validators.py`의 공통 field validator가 `full_clean()`에서 구조와 교시 순서를 검증합니다. `seed_educations`도 이 검증을 호출합니다. `save()`·`QuerySet.update()`·`bulk_create()`는 입력 검증을 자동 실행하지 않습니다. 향후 교육 편집 입력은 같은 검증 계약을 사용해야 합니다. 신청 입력은 별도 serializer로 검증하고 신규 접수 시 교육 row lock 아래 접수 활성 여부를 확인합니다. 교육 편집 기능은 제공하지 않습니다.
+목표·대상과 커리큘럼은 JSONField를 사용하며 `education/validators.py`의 공통 field validator가 `full_clean()`에서 구조와 교시 순서를 검증합니다. `seed_educations`도 이 검증을 호출합니다. `save()`·`QuerySet.update()`·`bulk_create()`는 입력 검증을 자동 실행하지 않습니다. 기본 admin의 `EducationForm`은 목표·대상을 줄 단위 텍스트로 받고 커리큘럼은 총 차시 수·교시·주제·활동·설명을 입력하는 formset으로 편집합니다. 교시 추가·삭제와 오류 시 입력 보존을 지원하며 저장 전에 같은 공통 validator를 적용합니다. 관리자는 JSON 문법을 입력하지 않습니다. 신청 입력은 별도 serializer로 검증하고 신규 접수 시 교육 row lock 아래 접수 활성 여부를 확인합니다.
 
 프리셋 JSON과 이미지 원본은 앱의 실행 코드와 분리해 저장소 루트 `presets/education/`에 보관합니다. 초기화 명령은 `src/education/management/commands/`에 유지하고 Django `BASE_DIR`의 상위인 저장소 루트를 기준으로 프리셋을 찾습니다. 초기화를 실행할 배포물에도 이 폴더를 포함해야 합니다. 프리셋 원본은 Git으로 관리하며 직접 제공하는 static이나 실행 중 업로드 저장소로 사용하지 않습니다. `seed_educations`는 사전 검증 후 누락 교육만 추가하고 기존 교육의 운영 정보와 이미지를 보존합니다. source_url·source_image_url·collected_on·editorial_note는 프리셋 JSON에만 보관하고 초기화 시 DB 저장 대상에서 제외합니다. 신규 프리셋의 진행 안내는 과제용 정책임을 JSON의 편집 설명에 명시하며 상세 화면에는 수집 기록을 표시하지 않습니다. 저장소가 반환한 실제 이름을 DB에 기록합니다. DB 오류 시 transaction은 롤백되지만 파일은 남을 수 있으므로 자동 삭제하지 않고 재실행에서 재사용합니다.
 
-신규 교육 이미지의 저장 키는 `education/<media_id의 32자 hex>/images/<filename>`입니다. `media_id`는 `UUIDField(default=uuid7, unique=True, editable=False)`로 생성 전에 부여하며 교육 생성 후 변경하지 않습니다. 기존 숫자 PK와 상세 URL의 slug는 유지합니다. UUIDv7은 Django의 Python 기본값으로 생성하며 DB 기본값은 두지 않습니다. 프리셋에는 교육별 고정 UUIDv7을 기록하고 형식·버전·중복을 쓰기 전에 검증합니다. 일반 FileField 파일 저장은 `education/media.py`의 upload_to callable에서 UUID 파일명과 원본 확장자를 사용합니다. 프리셋은 실패 후 재사용할 수 있도록 SHA256 내용 해시와 `.png`를 사용합니다. 로컬·S3 모두 덮어쓰기를 허용하지 않습니다. 기존 `education/presets/` 등의 키는 자동 이동하지 않으며 slug만 바꿔도 기존 파일 키는 유지합니다. 경로 함수는 migration에서도 참조하므로 import 경로를 유지합니다. 교육 schema는 빈 DB 초기 구성을 기준으로 하며 수집 기록 열 제거와 UUID 고유 필드 추가를 포함합니다. 기존 데이터가 있는 DB의 무중단 업그레이드는 별도 전환 설계가 필요합니다. 마이그레이션 정리 기준은 [개발 규약](development.md#마이그레이션-변경과-이력-정리)을 따릅니다.
+신규 교육 이미지의 저장 키는 `education/<media_id의 32자 hex>/images/<filename>`입니다. `media_id`는 `UUIDField(default=uuid7, unique=True, editable=False)`로 생성 전에 부여하며 교육 생성 후 변경하지 않습니다. 기존 숫자 PK와 상세 URL의 slug는 유지합니다. UUIDv7은 Django의 Python 기본값으로 생성하며 DB 기본값은 두지 않습니다. 프리셋에는 교육별 고정 UUIDv7을 기록하고 형식·버전·중복을 쓰기 전에 검증합니다. 일반 FileField 파일 저장은 `education/media.py`의 upload_to callable에서 UUID 파일명과 원본 확장자를 사용합니다. 프리셋은 실패 후 재사용할 수 있도록 SHA256 내용 해시와 `.png`를 사용합니다. 로컬·S3 모두 덮어쓰기를 허용하지 않습니다. 기존 `education/presets/` 등의 키는 자동 이동하지 않으며 slug만 바꿔도 기존 파일 키는 유지합니다. 경로 함수는 migration에서도 참조하므로 import 경로를 유지합니다. 프로젝트 schema는 전체 모델을 담은 단일 `src/education/migrations/0001_initial.py`로 빈 DB에 생성합니다. 이전 개발 migration 이력은 사용자 요청으로 통합했으며 기존 DB에 적용하는 업그레이드 경로는 제공하지 않습니다. 마이그레이션 정리 기준은 [개발 규약](development.md#마이그레이션-변경과-이력-정리)을 따릅니다.
 
 교육 단일·일괄 삭제와 일반 `save()`의 이미지 교체는 `education/signals.py`에서 이전 키를 수집하고 같은 DB transaction 안에 Q2 ORM 작업을 기록합니다. 일반 save는 post_save까지 atomic 경계에 포함하며 삭제는 Django의 deletion transaction을 사용합니다. commit 후 worker가 default Storage와 같은 DB alias에서 참조를 재확인해 미참조 파일만 삭제하므로 rollback·공유·재연결 파일을 보존합니다. 같은 키·image 제외 저장은 정리하지 않으며 `QuerySet.update()`·`bulk_update()`·직접 SQL은 signal을 우회합니다.
 
@@ -85,10 +90,34 @@ Education은 교육명·소개·미디어 FileField·목표·대상·시수별 �
 
 ## 신청과 자동 안내의 경계
 
-신청 관련 schema는 신청·안내·전송 시도·공유 발송 예산을 각각 저장하고 무결성을 위한 제약·인덱스를 둡니다. 신청 기능 도입은 기존 교육 데이터와 미디어 키의 변환·초기화를 요구하지 않습니다.
+| 모델 | 책임 |
+| --- | --- |
+| `Education` | 교육 소개·커리큘럼·이미지·상담 접수 가능 여부 |
+| `EducationApplication` | 최초 제출 원본·현재 신청 정보·상담 진행 상태·다음 연락 예정 |
+| `ConsultationRecord` | 작성자·시각·당시 일정이 포함된 상담 및 정정 기록 누적 |
+| `HistoricalEducationApplication` | django-simple-history가 생성하는 신청 변경 이력 |
+| `EducationApplicationReminderEmail` | 신청별 안내 이메일 대상 시각·현재 처리 상태·최근 전송 증거 |
+| `MailAttempt` | 처리권을 확보한 개별 전송 시도의 시작·종료·결과 |
+| `MailSendBudget` | SES worker들이 공유하는 다음 발송 허용 시각 |
 
-Application은 request_id의 DB unique 제약과 교육 row lock으로 동일 제출을 재사용하며 신청 당시 slug·교육명 snapshot과 개인정보를 보관합니다. 교육 삭제는 SET_NULL이며 신청·안내를 지우지 않습니다. 공개 API는 교육 GET과 CSRF를 검사하는 익명 신청 POST만 제공하고 응답은 request_id·접수 상태로 제한합니다. 교육의 접수 중단·삭제·날짜 경과 전후에도 기존 제출 확인은 새 접수 검증과 구분합니다.
+신청 관련 schema는 신청·안내·전송 시도·공유 발송 예산을 각각 저장하고 무결성을 위한 제약·인덱스를 둡니다. 최초 제출 원본과 현재 관리값을 구분하고 안내의 전송 증거를 별도로 보존합니다.
+
+`EducationApplication`은 request_id의 DB unique 제약과 교육 row lock으로 동일 제출을 재사용하며 신청 당시 slug·교육명 snapshot과 개인정보를 보관합니다. 교육 삭제는 SET_NULL이며 신청·안내를 지우지 않습니다. 공개 API는 교육 GET과 CSRF를 검사하는 익명 신청 POST만 제공하고 응답은 request_id·접수 상태로 제한합니다. 교육의 접수 중단·삭제·날짜 경과 전후에도 기존 제출 확인은 새 접수 검증과 구분합니다.
+
+교육 신청 모델은 `EducationApplication`, 해당 안내 이메일은 `EducationApplicationReminderEmail`로 명명합니다. 관계명 `EducationApplication.notification`·`MailAttempt.notification`과 기존 task 경로는 유지합니다. DB 테이블과 history 모델은 Django가 새 모델명으로 생성합니다.
 
 신청과 OneToOne 안내는 같은 transaction에 저장합니다. 단일 Q2 기본 큐·qcluster·worker 2개에서 처리하고 대상 등록 스케줄은 명시적 준비 명령으로만 만듭니다. 처리권·MailAttempt·시도 횟수를 먼저 commit한 뒤 긴 외부 호출을 수행하고 결과는 현재 attempt_id와 상태가 일치할 때 함께 저장합니다. 수신자·본문은 Q2 payload에 넣지 않고 ID로 조회합니다. SES 전송 예산은 별도 singleton row의 짧은 lock으로 worker 간 공유합니다. 상세 정책과 명령은 [운영 가이드](guides/operations.md#백그라운드-worker와-자동-안내)를 따릅니다.
 
-Django 이메일 API와 MAILERS 설정으로 개발 locmem·운영 django-ses를 선택합니다. 모의 완료와 SES 접수를 구분하고 결과 불명은 재전송하지 않습니다. SNS·SQS·웹훅·실제 전달·반송 추적은 현재 구성에 포함하지 않습니다. 신청 관리와 개인정보 조회는 후속 범위입니다.
+실제 전송은 Django 이메일 API와 `MAILERS["default"]["BACKEND"]` 설정을 따르며 개발 locmem·운영 django-ses를 선택합니다. 안내에 저장한 mode는 생성 당시 환경을 기록하고 환경 불일치 발송을 차단하는 값이며 backend를 선택하지 않습니다. 모의 완료와 SES 접수를 구분하고 결과 불명은 재전송하지 않습니다. SNS·SQS·웹훅·실제 전달·반송 추적은 현재 구성에 포함하지 않습니다. 개인정보와 상담 기록은 admin 모델 권한으로 제한하며 공개 신청 조회는 제공하지 않습니다.
+
+## 신청 관리와 이력
+
+`EducationApplication`은 수정 가능한 관리값과 최초 정규화 제출 JSON snapshot을 분리합니다. 원본은 관리자에게 읽기 전용이고 공개 재시도는 원본만 비교합니다. 상담 진행 상태가 바뀌어도 공개 응답은 최초 접수만 확인합니다. 원본 snapshot은 history에서 제외하고 신청의 일반 save는 history와 같은 transaction에 저장합니다.
+
+`forms/education.py`·`forms/application.py`·`forms/consultation.py`는 입력 표시와 폼 검증을 담당합니다. 신청 변경의 공통 검증·저장은 `services/applications.py`에 두며 별도 service 클래스나 재노출 wrapper는 만들지 않습니다. worker와 관리 저장이 공유하는 종료 상태는 `EducationApplication.TERMINAL_STATUSES`를 사용합니다.
+
+관리 변경은 `services.applications.save_application`을 사용합니다. 안내→신청 row lock 순서로 worker claim과 직렬화하며 신청·이력·안내 조정을 함께 저장합니다. admin은 폼 조회 전 같은 lock을 얻고 상담 inline도 요청 transaction에 포함합니다. 다음 연락 예정은 follow_up에서만 사용하며 메일 대상 시각과 구분합니다.
+
+ConsultationRecord는 작성자·시각·결과·내용·당시 일정과 정정 대상 원기록을 누적합니다. 기존 기록은 수정·삭제하지 않고 같은 신청의 원기록을 가리키는 정정으로 보완합니다. 신청·상담의 instance/QuerySet 삭제와 상담 update를 차단하며 상담 작성자가 있는 계정은 삭제 대신 비활성화합니다.
+
+신청 이력은 django-simple-history로 기록하고 admin에서 읽기만 허용합니다. 교육 삭제로 인한 연결 해제는 pre_delete에서 이력 지원 save를 사용합니다. QuerySet.update·bulk_update·직접 SQL은 일반 이력 포착 경로가 아니므로 새 관리 코드에서 사용하지 않습니다. 직접 SQL의 변조 방지나 운영 개인정보 삭제 정책까지 보장하지 않습니다.

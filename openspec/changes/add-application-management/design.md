@@ -4,7 +4,7 @@
 
 배경과 범위는 [proposal.md](proposal.md)를 따른다. 직접 작성한 앱은 `education` 하나이며 `admin.py`는 비어 있다. Django 인증·admin·CSRF와 Q2 자체 admin은 이미 설정되어 있다.
 
-`Application.Status`에는 received만 있고 `ApplicationSerializer._reuse()`는 현재 모델 필드와 최초 제출을 직접 비교한다. 공개 API도 현재 `application.status`를 반환하므로 상태 추가만 하면 기존 접수 응답 명세가 깨진다. 안내는 신청과 OneToOne이며 연락 가능 날짜를 바탕으로 `due_at`을 생성한다. `claim()`이 안내와 신청을 읽어 sending을 확정한 뒤 외부 호출은 lock 밖에서 실행한다.
+`EducationApplication.Status`에는 received만 있고 `EducationApplicationSerializer._reuse()`는 현재 모델 필드와 최초 제출을 직접 비교한다. 공개 API도 현재 `application.status`를 반환하므로 상태 추가만 하면 기존 접수 응답 명세가 깨진다. 안내는 신청과 OneToOne이며 연락 가능 날짜를 바탕으로 `due_at`을 생성한다. `claim()`이 안내와 신청을 읽어 sending을 확정한 뒤 외부 호출은 lock 밖에서 실행한다.
 
 관련 계약은 `specs/application-management`, `specs/education-administration`, `specs/education-applications`, `specs/application-notifications` delta를 따른다. 기존 명세의 공개 신청 조회 금지와 사용자 요청의 관리자 조회는 접근 경계가 다르므로 함께 유지한다. 원문 CRUD 중 삭제는 사용자의 보존 요구를 우선하며 별도 논리 삭제 모델을 만들지 않는다.
 
@@ -29,9 +29,9 @@
 | 모델 | 화면과 작업 |
 | --- | --- |
 | Education | 목록·검색·필터·등록·수정. 이번 화면의 삭제 동작은 비활성화 |
-| Application | 목록·상세·정정·상태·일정·이력 조회. 추가·삭제·일괄 상태 변경 없음 |
+| EducationApplication | 목록·상세·정정·상태·일정·이력 조회. 추가·삭제·일괄 상태 변경 없음 |
 | ConsultationRecord — 신규 | 신청별 누적 기록 추가·조회. 기존 기록 변경·삭제 없음 |
-| ApplicationNotification / MailAttempt / MailSendBudget | 별도 조회 전용 등록. 관련 권한 없이 신청 상세의 안내 정보도 공개하지 않음 |
+| EducationApplicationReminderEmail / MailAttempt / MailSendBudget | 별도 조회 전용 등록. 관련 권한 없이 신청 상세의 안내 정보도 공개하지 않음 |
 
 기본 User·Group과 Q2 등록은 유지하며 sessions·contenttypes 같은 프레임워크 내부 모델을 새로 노출하지 않는다. 신청 목록은 이름·이메일 검색, 교육 snapshot·상태·연락 날짜·재연락 분류 필터와 기본 pagination을 사용한다. 상세 관련 데이터 조회는 실제 사용 관계만 함께 조회한다.
 
@@ -53,7 +53,7 @@ ConsultationRecord는 신청 FK, 작성자, 작성 시각, 결과(상담 진행�
 
 SimpleHistoryAdmin으로 전후 값·시각·사용자를 조회하되 복원 UI와 직접 복원 요청을 차단한다. 이력 조회는 신청 조회 권한을 필요로 하며 historical 모델을 별도 쓰기 가능한 admin으로 등록하지 않는다. 최초 제출 snapshot은 이력 대상에서 제외해 같은 개인정보의 불필요한 중복을 줄인다. 현재 신청의 교육 FK 해제 같은 시스템 변경에는 사용자 없음과 변경 사유를 구분한다. 사용자 추적이 없는 외부 작업자를 특정 관리자처럼 표시하지 않는다.
 
-신청 일괄 상태 action이나 QuerySet.update/bulk_update를 새 관리 경로에 사용하지 않는다. 기존 교육 삭제의 SET_NULL은 Django Collector가 signal 없이 갱신할 수 있으므로, 연결 신청을 삭제 transaction 안에서 이력 지원 저장으로 먼저 해제하고 history를 남기도록 기존 교육 삭제 signal과 직접 영향 범위를 확인한다. 안내 worker의 상태 변화는 Application 이력 대상이 아니며 기존 MailAttempt가 담당한다.
+신청 일괄 상태 action이나 QuerySet.update/bulk_update를 새 관리 경로에 사용하지 않는다. 기존 교육 삭제의 SET_NULL은 Django Collector가 signal 없이 갱신할 수 있으므로, 연결 신청을 삭제 transaction 안에서 이력 지원 저장으로 먼저 해제하고 history를 남기도록 기존 교육 삭제 signal과 직접 영향 범위를 확인한다. 안내 worker의 상태 변화는 EducationApplication 이력 대상이 아니며 기존 MailAttempt가 담당한다.
 
 패키지의 생성/변경 history도 해당 신청 transaction과 함께 rollback되어야 한다. 저장 실패 시 변경만 남는지 실제 DB 테스트로 확인한다. 교육 자체·내부 안내 모델의 범용 이력은 추가하지 않는다.
 
@@ -103,3 +103,7 @@ EducationAdmin은 ModelForm의 기존 모델 validator를 사용해 목표·대�
 5. 신규 관리 기록이 쌓인 뒤 migration 역적용은 이력 손실을 일으키므로 기본 rollback은 새 관리 쓰기 중단과 데이터·schema 보존 후 전진 수정이다. 구 코드로 돌아가면 새 상태를 이해하지 못하므로 전체 버전 rollback은 별도 데이터 검토 없이는 수행하지 않는다.
 
 공식 참고: [지원 버전](https://pypi.org/project/django-simple-history/), [admin 연동](https://django-simple-history.readthedocs.io/en/stable/admin.html), [일괄 갱신 제한](https://django-simple-history.readthedocs.io/en/stable/common_issues.html).
+
+## 사용자 후속 결정 (2026-10-22)
+
+신청과 이메일 모델명은 `EducationApplication`·`EducationApplicationReminderEmail`로 통일한다. 사용자가 개발 DB 초기화와 migration 통합을 요청했으므로 기존 migration/backfill 설계를 단일 `0001_initial.py`의 빈 DB 생성으로 대체하고 프리셋·Q2 스케줄을 다시 준비한다. 패키지 migration과 미디어는 유지한다. 교육 admin은 JSON 저장 구조를 유지하되 목표·추천 대상은 줄 단위 텍스트, 커리큘럼은 교시별 formset으로 편집하여 JSON 직접 입력을 없앤다.

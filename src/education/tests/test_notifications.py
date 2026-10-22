@@ -11,29 +11,29 @@ from botocore.config import Config
 from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
 from django.core import mail
 from django.core.management import call_command
-from django.db import close_old_connections
+from django.db import close_old_connections, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from django_q.models import OrmQ, Schedule
 from django_q.signing import SignedPackage
 
 from education.models import (
-    Application,
-    ApplicationNotification,
+    EducationApplication,
+    EducationApplicationReminderEmail,
     MailAttempt,
     MailSendBudget,
 )
 from education.tasks import (
     enqueue_consultation_reminder_emails,
+    reminder_delivery,
     send_consultation_reminder_email,
 )
-from education.tasks_support import consultation_reminder_delivery as reminder_delivery
-from education.tasks_support.exceptions import SafeTaskError
+from education.tasks.exceptions import SafeTaskError
 
 
 def notification(**fields):
     """개인정보 노출·escaping 검사용 신청과 기본적으로 기한이 지난 안내를 DB에 생성한다."""
-    application = Application.objects.create(
+    application = EducationApplication.objects.create(
         education_slug="course",
         education_title="교육 <b>제목</b>",
         request_id=uuid4(),
@@ -43,7 +43,7 @@ def notification(**fields):
         address="민감한 주소",
         contact_date=timezone.localdate(),
     )
-    return ApplicationNotification.objects.create(
+    return EducationApplicationReminderEmail.objects.create(
         application=application,
         **dict(
             {"due_at": timezone.now() - timedelta(minutes=1), "mode": "simulated"},
@@ -74,31 +74,35 @@ class NotificationTests(TestCase):
         self.assertEqual(sum(row.attempt_count for row in later), 0)
 
     def test_dispatch_capacity_and_enqueue_failure_preserve_targets(self):
-        with patch(
-            "education.tasks_support.consultation_reminder_dispatch.MAIL_QUEUE_LIMIT", 2
-        ):
+        with patch("education.tasks.reminder_dispatch.MAIL_QUEUE_LIMIT", 2):
             rows = [notification() for _ in range(3)]
             self.assertEqual(enqueue_consultation_reminder_emails(), 2)
             self.assertEqual(
-                ApplicationNotification.objects.filter(state="pending").count(), 1
+                EducationApplicationReminderEmail.objects.filter(
+                    state="pending"
+                ).count(),
+                1,
             )
         OrmQ.objects.all().delete()
-        ApplicationNotification.objects.all().update(state="pending", queued_at=None)
+        EducationApplicationReminderEmail.objects.all().update(
+            state="pending", queued_at=None
+        )
         with patch(
-            "education.tasks_support.consultation_reminder_dispatch.async_task",
+            "education.tasks.reminder_dispatch.async_task",
             side_effect=RuntimeError("queue unavailable"),
         ):
             with self.assertRaises(RuntimeError):
                 enqueue_consultation_reminder_emails()
         self.assertFalse(OrmQ.objects.exists())
         self.assertEqual(
-            ApplicationNotification.objects.filter(state="pending").count(), len(rows)
+            EducationApplicationReminderEmail.objects.filter(state="pending").count(),
+            len(rows),
         )
         self.assertEqual(enqueue_consultation_reminder_emails(), 3)
 
     def test_dispatch_budget_creates_one_continuation(self):
         notification()
-        with patch("education.tasks.monotonic", side_effect=[0, 0, 21]):
+        with patch("education.tasks.reminders.monotonic", side_effect=[0, 0, 21]):
             self.assertEqual(enqueue_consultation_reminder_emails(), 0)
         package = SignedPackage.loads(OrmQ.objects.get().payload)
         self.assertEqual(
@@ -109,8 +113,11 @@ class NotificationTests(TestCase):
     def test_failed_continuation_is_recovered_by_next_periodic_dispatch(self):
         row = notification()
         with (
-            patch("education.tasks.monotonic", side_effect=[0, 0, 21]),
-            patch("education.tasks.async_task", side_effect=RuntimeError("queue")),
+            patch("education.tasks.reminders.monotonic", side_effect=[0, 0, 21]),
+            patch(
+                "education.tasks.reminders.async_task",
+                side_effect=RuntimeError("queue"),
+            ),
             self.assertRaises(RuntimeError),
         ):
             enqueue_consultation_reminder_emails()
@@ -129,8 +136,10 @@ class NotificationTests(TestCase):
             ("retry_wait", past, past, True),
             ("pending", past, None, True),
         ):
-            with self.subTest(state=state, due_at=due_at, retry_at=retry_at):
-                Application.objects.all().delete()
+            with (
+                self.subTest(state=state, due_at=due_at, retry_at=retry_at),
+                transaction.atomic(),
+            ):
                 OrmQ.objects.all().delete()
                 first = notification(due_at=past - timedelta(days=1))
                 waiting = notification(
@@ -138,10 +147,12 @@ class NotificationTests(TestCase):
                 )
                 with (
                     patch(
-                        "education.tasks_support.consultation_reminder_dispatch.BATCH_SIZE",
+                        "education.tasks.reminder_dispatch.BATCH_SIZE",
                         1,
                     ),
-                    patch("education.tasks.monotonic", side_effect=[0, 0, 0, 21]),
+                    patch(
+                        "education.tasks.reminders.monotonic", side_effect=[0, 0, 0, 21]
+                    ),
                 ):
                     self.assertEqual(enqueue_consultation_reminder_emails(), 1)
                 packages = [
@@ -161,6 +172,7 @@ class NotificationTests(TestCase):
                 self.assertEqual(
                     enqueue_consultation_reminder_emails(), int(continuation)
                 )
+                transaction.set_rollback(True)
 
     def test_simulation_is_once_and_does_not_contact_aws(self):
         row = notification(state="queued", queued_at=timezone.now())
@@ -185,7 +197,7 @@ class NotificationTests(TestCase):
         )
         sending = notification(state="queued", queued_at=timezone.now())
         claimed = reminder_delivery.claim(sending.pk)
-        ApplicationNotification.objects.filter(pk=sending.pk).update(
+        EducationApplicationReminderEmail.objects.filter(pk=sending.pk).update(
             started_at=timezone.now() - timedelta(minutes=11)
         )
         self.assertEqual(enqueue_consultation_reminder_emails(), 1)
@@ -209,7 +221,7 @@ class NotificationTests(TestCase):
     def test_success_recording_is_atomic_and_failure_is_safe(self):
         row = notification(state="queued", queued_at=timezone.now())
         with patch(
-            "education.tasks_support.consultation_reminder_delivery.MailAttempt.objects.filter",
+            "education.tasks.reminder_delivery.MailAttempt.objects.filter",
             side_effect=RuntimeError("private-data"),
         ):
             with self.assertRaises(SafeTaskError) as error:
@@ -342,11 +354,11 @@ class SESNotificationTests(TestCase):
             )
             if index > 1:
                 start = row.next_retry_at
-                ApplicationNotification.objects.filter(pk=row.pk).update(
+                EducationApplicationReminderEmail.objects.filter(pk=row.pk).update(
                     state="queued", queued_at=start
                 )
             with patch(
-                "education.tasks_support.consultation_reminder_delivery.timezone.now",
+                "education.tasks.reminder_delivery.timezone.now",
                 return_value=start,
             ):
                 if index < 3:
@@ -469,7 +481,7 @@ class ConcurrentNotificationTests(TransactionTestCase):
         self.assertEqual(MailSendBudget.objects.count(), 1)
         self.assertEqual(MailAttempt.objects.count(), 1)
         self.assertEqual(
-            ApplicationNotification.objects.filter(
+            EducationApplicationReminderEmail.objects.filter(
                 state="retry_wait", attempt_count=0
             ).count(),
             1,

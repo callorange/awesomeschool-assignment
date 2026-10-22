@@ -11,7 +11,9 @@ urlpatterns = [
         name="education-api",
     ),
     path(
-        "api/applications/", api.ApplicationCreateAPI.as_view(), name="application-api"
+        "api/applications/",
+        api.EducationApplicationCreateAPI.as_view(),
+        name="application-api",
     ),
     path("", views.landing, name="landing"),
     path("educations/<slug:slug>/", views.detail, name="detail"),

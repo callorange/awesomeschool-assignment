@@ -1,0 +1,14 @@
+<fieldset class="module aligned">
+  <legend>교시 정보</legend>
+  {{ form.non_field_errors }}
+  {% for field in form %}
+    <div class="form-row">
+      {{ field.errors }}
+      {% if field.name == "DELETE" %}
+        {{ field }} <label for="{{ field.id_for_label }}">이 교시 삭제</label>
+      {% else %}
+        {{ field.label_tag }} {{ field }}
+      {% endif %}
+    </div>
+  {% endfor %}
+</fieldset>

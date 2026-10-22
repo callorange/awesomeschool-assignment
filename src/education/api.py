@@ -6,8 +6,8 @@ from rest_framework.generics import CreateAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Education
-from .serializers import ApplicationSerializer, EducationSerializer
+from .models import Education, EducationApplication
+from .serializers import EducationApplicationSerializer, EducationSerializer
 
 
 class EducationDetailAPI(RetrieveAPIView):
@@ -21,15 +21,19 @@ class EducationDetailAPI(RetrieveAPIView):
 
 
 @method_decorator(csrf_protect, name="dispatch")
-class ApplicationCreateAPI(CreateAPIView):
+class EducationApplicationCreateAPI(CreateAPIView):
     """인증 여부와 무관하게 CSRF를 검사하고 동일 제출에 200을 반환한다."""
 
-    serializer_class = ApplicationSerializer
+    serializer_class = EducationApplicationSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def create(self, request, *args, **kwargs):
-        """신규 201·동일 제출 200에 식별자와 접수 상태만 반환해 개인정보를 제외한다."""
+        """신규 201·동일 제출 200에 식별자와 최초 접수 상태만 반환한다.
+
+        관리자 정정 후 재요청해도 현재 상담 상태나 개인정보를 공개하지 않고
+        최초 제출의 접수 확인 응답을 유지한다.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -37,8 +41,8 @@ class ApplicationCreateAPI(CreateAPIView):
         return Response(
             {
                 "request_id": str(application.request_id),
-                "status": application.status,
-                "status_display": application.get_status_display(),
+                "status": EducationApplication.Status.RECEIVED,
+                "status_display": EducationApplication.Status.RECEIVED.label,
             },
             status=201 if serializer.created else 200,
         )

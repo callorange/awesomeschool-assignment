@@ -2,11 +2,21 @@
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 from django_q.tasks import async_task
 
 from .models import Education
+
+
+@receiver(pre_delete, sender=Education)
+def preserve_application_education_history(sender, instance, using, **kwargs):
+    """Collector의 SET_NULL이 signal을 우회하기 전에 신청 연결 해제를 기록한다."""
+    for application in instance.applications.using(using).all():
+        application.education = None
+        application._history_user = None
+        application._change_reason = "원본 교육 삭제로 연결 해제"
+        application.save(using=using, update_fields=["education"])
 
 
 def _queue_image_cleanup(name, using):

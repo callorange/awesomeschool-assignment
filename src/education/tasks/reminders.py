@@ -1,19 +1,17 @@
-"""상담 안내 이메일과 미참조 교육 이미지 정리의 Q2 진입점을 제공한다."""
+"""상담 안내 이메일의 대상 등록과 발송 task 진입점을 제공한다."""
 
 from time import monotonic
 
-from django.core.files.storage import storages
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django_q.tasks import async_task
 
-from .models import ApplicationNotification, Education
-from .tasks_support import consultation_reminder_delivery as reminder_delivery
-from .tasks_support import consultation_reminder_dispatch as reminder_dispatch
-from .tasks_support.exceptions import SafeTaskError
+from ..models import EducationApplication, EducationApplicationReminderEmail
+from . import reminder_delivery, reminder_dispatch
+from .exceptions import SafeTaskError
 
-State = ApplicationNotification.State
+State = EducationApplicationReminderEmail.State
 DISPATCH_SECONDS = 20
 
 
@@ -43,9 +41,10 @@ def enqueue_consultation_reminder_emails():
     with transaction.atomic():
         now = timezone.now()
         if (
-            ApplicationNotification.objects.filter(state=State.QUEUED).count()
+            EducationApplicationReminderEmail.objects.filter(state=State.QUEUED).count()
             < reminder_dispatch.MAIL_QUEUE_LIMIT
-            and ApplicationNotification.objects.filter(due_at__lte=now)
+            and EducationApplicationReminderEmail.objects.filter(due_at__lte=now)
+            .exclude(application__status__in=EducationApplication.TERMINAL_STATUSES)
             .filter(
                 Q(state=State.PENDING)
                 | Q(state=State.RETRY_WAIT, next_retry_at__lte=now)
@@ -82,7 +81,7 @@ def send_consultation_reminder_email(notification_id):
             message.send(fail_silently=False), message, row.mode
         )
     except Exception as error:
-        if row.mode == ApplicationNotification.Mode.SES:
+        if row.mode == EducationApplicationReminderEmail.Mode.SES:
             state, code, delay = reminder_delivery.classify_error(
                 error, row.attempt_count
             )
@@ -98,28 +97,3 @@ def send_consultation_reminder_email(notification_id):
     if state in (State.FAILED, State.UNKNOWN):
         raise SafeTaskError(f"mail:{row.attempt_id}:{code}") from None
     return state
-
-
-def delete_unreferenced_education_image(name, storage_alias="default", using="default"):
-    """현재 DB 참조를 재확인한 뒤 지정된 Storage의 미참조 파일만 삭제한다.
-
-    Args:
-        name: Storage 기준 상대 파일 키. 큐에는 파일 객체 대신 이 키를 저장한다.
-        storage_alias: storages에서 선택할 저장소 alias.
-        using: 교육 참조를 조회할 DB alias.
-
-    Returns:
-        참조가 있거나 키가 비어 있으면 "preserved", 삭제 요청 완료 시 "deleted".
-        이미 없는 파일의 성공 처리는 각 Storage.delete 계약을 따른다.
-
-    Raises:
-        SafeTaskError: 저장소 삭제 실패. Q2 제한 재시도를 위해 예외를 전달하되
-            원문 대신 파일 키와 예외 종류만 남긴다.
-    """
-    if not name or Education.objects.using(using).filter(image=name).exists():
-        return "preserved"
-    try:
-        storages[storage_alias].delete(name)
-    except Exception as error:
-        raise SafeTaskError(f"media:{name}:{type(error).__name__}") from None
-    return "deleted"

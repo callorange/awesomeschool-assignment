@@ -39,5 +39,5 @@ def exhaust_dispatch_budget():
 
     from education.tasks import enqueue_consultation_reminder_emails
 
-    with patch("education.tasks.monotonic", side_effect=[0, 0, 21]):
+    with patch("education.tasks.reminders.monotonic", side_effect=[0, 0, 21]):
         return enqueue_consultation_reminder_emails()

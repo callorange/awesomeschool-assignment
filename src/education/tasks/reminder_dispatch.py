@@ -6,9 +6,13 @@ from django.db import transaction
 from django.db.models import Q
 from django_q.tasks import async_task
 
-from ..models import ApplicationNotification, MailAttempt
+from ..models import (
+    EducationApplication,
+    EducationApplicationReminderEmail,
+    MailAttempt,
+)
 
-State = ApplicationNotification.State
+State = EducationApplicationReminderEmail.State
 BATCH_SIZE = 100
 MAIL_QUEUE_LIMIT = 200
 STALE_AFTER = timedelta(minutes=10)
@@ -19,11 +23,15 @@ def recover_stale_batch(now):
 
     큐 재전달은 전송 증거가 아니므로 sending의 횟수를 되돌리거나 재발송하지
     않는다. 처리 중인 다른 transaction의 row는 건너뛰고 복구한 건수를 반환한다.
+    신청 상태 필터의 JOIN이 신청 row까지 잠그지 않도록 of=("self",)로 안내만 잠근다.
     """
     stale = now - STALE_AFTER
     with transaction.atomic():
         rows = list(
-            ApplicationNotification.objects.select_for_update(skip_locked=True)
+            EducationApplicationReminderEmail.objects.select_for_update(
+                skip_locked=True, of=("self",)
+            )
+            .exclude(application__status__in=EducationApplication.TERMINAL_STATUSES)
             .filter(
                 Q(state=State.QUEUED, queued_at__lte=stale)
                 | Q(state=State.SENDING, started_at__lte=stale)
@@ -50,21 +58,25 @@ def register_due_batch(now):
 
     skip_locked로 중복 선택을 피하고 안내 상태와 Q2 ORM row를 같은 transaction에
     기록한다. enqueue 실패 시 batch 전체를 rollback하므로 다음 검사에서 재발견한다.
+    안내만 잠가 관리 저장과 worker claim의 안내→신청 잠금 순서를 유지한다.
     """
     with transaction.atomic():
         room = (
             MAIL_QUEUE_LIMIT
-            - ApplicationNotification.objects.filter(state=State.QUEUED).count()
+            - EducationApplicationReminderEmail.objects.filter(
+                state=State.QUEUED
+            ).count()
         )
         if room <= 0:
             return 0
         rows = list(
-            ApplicationNotification.objects.filter(due_at__lte=now)
+            EducationApplicationReminderEmail.objects.filter(due_at__lte=now)
+            .exclude(application__status__in=EducationApplication.TERMINAL_STATUSES)
             .filter(
                 Q(state=State.PENDING)
                 | Q(state=State.RETRY_WAIT, next_retry_at__lte=now)
             )
-            .select_for_update(skip_locked=True)
+            .select_for_update(skip_locked=True, of=("self",))
             .order_by("due_at", "pk")[: min(BATCH_SIZE, room)]
         )
         for row in rows:

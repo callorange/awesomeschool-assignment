@@ -1,7 +1,11 @@
 from uuid import uuid7
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models, router, transaction
 from django.utils import timezone
+from simple_history.models import HistoricalRecords
 
 from .media import education_image_upload_to
 from .validators import validate_curriculum, validate_text_list
@@ -116,7 +120,21 @@ class Education(models.Model):
             return super().save(*args, **kwargs)
 
 
-class Application(models.Model):
+class PreservedQuerySet(models.QuerySet):
+    """신청과 상담의 일반 ORM 삭제를 차단하며 테스트 DB flush는 방해하지 않는다."""
+
+    def delete(self):
+        raise ValidationError("신청과 상담 기록은 삭제할 수 없습니다.")
+
+
+class ConsultationQuerySet(PreservedQuerySet):
+    """기존 상담은 변경하지 않고 새 정정 기록으로 보완한다."""
+
+    def update(self, **kwargs):
+        raise ValidationError("기존 상담 기록은 수정할 수 없습니다.")
+
+
+class EducationApplication(models.Model):
     """교육 삭제 후에도 신청 당시 상담 내용과 제출 식별자를 보존한다.
 
     education_slug·education_title은 신청 시점의 snapshot이다. 같은 request_id의
@@ -126,6 +144,19 @@ class Application(models.Model):
 
     class Status(models.TextChoices):
         RECEIVED = "received", "접수"
+        CONSULTING = "consulting", "상담중"
+        FOLLOW_UP = "follow_up", "재연락 예정"
+        COMPLETED = "completed", "완료"
+        CANCELLED = "cancelled", "취소"
+
+    TERMINAL_STATUSES = (Status.COMPLETED, Status.CANCELLED)
+
+    objects = PreservedQuerySet.as_manager()
+    history = HistoricalRecords(excluded_fields=["submission_snapshot"])
+
+    submission_snapshot = models.JSONField("최초 제출 입력", editable=False)
+    next_contact_at = models.DateTimeField("다음 연락 예정", null=True, blank=True)
+    cancellation_reason = models.TextField("취소 사유", blank=True, default="")
 
     education = models.ForeignKey(
         Education,
@@ -160,6 +191,7 @@ class Application(models.Model):
     postal_code = models.CharField(
         "우편번호",
         max_length=5,
+        validators=[RegexValidator(r"^[0-9]{5}$", "숫자 5자리를 입력해 주세요.")],
         help_text="주소 검색 또는 직접 입력한 숫자 5자리 우편번호입니다.",
     )
     address = models.CharField(
@@ -196,8 +228,131 @@ class Application(models.Model):
         verbose_name = "교육 신청"
         verbose_name_plural = "교육 신청"
 
+    def __str__(self):
+        return f"신청 {self.pk} · {self.education_title}"
 
-class ApplicationNotification(models.Model):
+    def delete(self, *args, **kwargs):
+        raise ValidationError("신청은 삭제할 수 없습니다.")
+
+    def save(self, *args, **kwargs):
+        """최초 제출을 보존하고 신청과 history 저장이 함께 commit되게 한다.
+
+        생성 시 날짜·UUID를 문자열로 정규화한 원본을 저장한다. 이후 원본·제출
+        식별자·교육 snapshot·생성 시각은 일반 save로 바꿀 수 없다. QuerySet.update와
+        bulk_update·직접 SQL은 이 검증과 일반 변경 이력 포착을 우회한다.
+        """
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            if self._state.adding:
+                self.submission_snapshot = {
+                    field: str(getattr(self, field))
+                    for field in (
+                        "education_slug",
+                        "name",
+                        "email",
+                        "postal_code",
+                        "address",
+                        "address_detail",
+                        "contact_date",
+                        "request_id",
+                    )
+                }
+            else:
+                original = type(self).objects.using(using).get(pk=self.pk)
+                if any(
+                    getattr(self, field) != getattr(original, field)
+                    for field in (
+                        "submission_snapshot",
+                        "request_id",
+                        "education_slug",
+                        "education_title",
+                        "created_at",
+                    )
+                ):
+                    raise ValidationError("최초 제출 정보는 변경할 수 없습니다.")
+            return super().save(*args, **kwargs)
+
+
+class ConsultationRecord(models.Model):
+    """상담 당시의 결과·일정과 정정 대상을 덮어쓰지 않고 누적한다."""
+
+    class Result(models.TextChoices):
+        CONSULTED = "consulted", "상담 진행"
+        UNREACHABLE = "unreachable", "부재중"
+        RESCHEDULED = "rescheduled", "재연락 합의"
+        CORRECTION = "correction", "정정"
+
+    objects = ConsultationQuerySet.as_manager()
+    application = models.ForeignKey(
+        EducationApplication,
+        on_delete=models.PROTECT,
+        related_name="consultations",
+        verbose_name="교육 신청",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        verbose_name="작성자",
+        editable=False,
+    )
+    created_at = models.DateTimeField("작성 시각", default=timezone.now, editable=False)
+    result = models.CharField("연락 결과", max_length=20, choices=Result)
+    content = models.TextField("상담 내용")
+    next_contact_at = models.DateTimeField(
+        "당시 다음 연락 예정",
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    corrects = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="corrections",
+        verbose_name="정정 대상",
+    )
+
+    class Meta:
+        verbose_name = "상담 기록"
+        verbose_name_plural = "상담 기록"
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return f"상담 기록 {self.pk} · {self.get_result_display()}"
+
+    def clean(self):
+        super().clean()
+        if not self.content.strip():
+            raise ValidationError({"content": "상담 내용을 입력해 주세요."})
+        if self.result == self.Result.CORRECTION:
+            if not self.corrects_id:
+                raise ValidationError({"corrects": "정정할 원기록을 선택해 주세요."})
+            if self.corrects.application_id != self.application_id:
+                raise ValidationError(
+                    {"corrects": "같은 신청의 기록만 정정할 수 있습니다."}
+                )
+        elif self.corrects_id:
+            raise ValidationError(
+                {"corrects": "정정 결과에서만 원기록을 지정할 수 있습니다."}
+            )
+
+    def save(self, *args, **kwargs):
+        """새 상담만 검증 후 추가하며 기존 PK를 가진 새 인스턴스의 덮어쓰기도 막는다."""
+        if not self._state.adding or (
+            self.pk is not None and type(self).objects.filter(pk=self.pk).exists()
+        ):
+            raise ValidationError(
+                "기존 상담 기록은 수정할 수 없습니다. 정정을 추가해 주세요."
+            )
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("상담 기록은 삭제할 수 없습니다.")
+
+
+class EducationApplicationReminderEmail(models.Model):
     """큐 재전달과 실제 메일 전송 시도를 구분하는 신청별 영속 처리 기록이다.
 
     신청과 같은 transaction에 pending·시도 0으로 생성한다. worker는 처리권과
@@ -214,13 +369,14 @@ class ApplicationNotification(models.Model):
         RETRY_WAIT = "retry_wait", "재시도 대기"
         FAILED = "failed", "실패"
         UNKNOWN = "unknown", "결과 확인 필요"
+        SUPPRESSED = "suppressed", "발송 중단"
 
     class Mode(models.TextChoices):
         SIMULATED = "simulated", "개발 모의 처리"
         SES = "ses", "운영 SES"
 
     application = models.OneToOneField(
-        Application,
+        EducationApplication,
         verbose_name="교육 신청",
         on_delete=models.CASCADE,
         related_name="notification",
@@ -300,8 +456,8 @@ class ApplicationNotification(models.Model):
     )
 
     class Meta:
-        verbose_name = "신청 자동 안내"
-        verbose_name_plural = "신청 자동 안내"
+        verbose_name = "상담 안내 이메일"
+        verbose_name_plural = "상담 안내 이메일"
         indexes = [
             models.Index(fields=["state", "due_at"], name="notification_due_idx"),
             models.Index(
@@ -331,8 +487,8 @@ class MailAttempt(models.Model):
         help_text="처리권 확보 시 생성하는 UUIDv7입니다. 하나의 전송 시도와 그 결과를 연결합니다.",
     )
     notification = models.ForeignKey(
-        ApplicationNotification,
-        verbose_name="신청 자동 안내",
+        EducationApplicationReminderEmail,
+        verbose_name="상담 안내 이메일",
         on_delete=models.CASCADE,
         related_name="attempts",
         help_text="이 시도가 속한 안내입니다. 재시도 이력도 같은 안내에 연결합니다.",
@@ -351,8 +507,8 @@ class MailAttempt(models.Model):
     state = models.CharField(
         "시도 처리 상태",
         max_length=20,
-        choices=ApplicationNotification.State,
-        default=ApplicationNotification.State.SENDING,
+        choices=EducationApplicationReminderEmail.State,
+        default=EducationApplicationReminderEmail.State.SENDING,
         help_text="개별 시도의 처리 결과입니다. unknown은 실제 접수 여부를 확정할 수 없다는 뜻입니다.",
     )
     ses_message_id = models.CharField(

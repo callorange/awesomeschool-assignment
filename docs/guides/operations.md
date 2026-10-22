@@ -68,7 +68,13 @@ uv run --no-sync python src/manage.py check --settings=config.settings.prod
 uv run --no-sync python src/manage.py seed_educations --settings=config.settings.prod
 ```
 
-현재 운영 static backend는 로컬 StaticFilesStorage이며 STATIC_ROOT·collectstatic 산출물 서빙·웹 서버/서비스 관리자·HTTPS 배포는 아직 구성하지 않았습니다. S3/SES backend 설정이 있다는 것만으로 운영 배포가 완료된 것은 아닙니다. SNS·SQS·웹훅·configuration set은 현재 요구하지 않으며 실제 전달·반송 확인이 필요할 때 후속 연동합니다.
+정적 파일은 dev·prod 모두 로컬 StaticFilesStorage를 사용합니다. 아래 명령으로 `src/static/`과 Django admin 등 설치 앱의 자산을 저장소 루트의 `staticfiles/`(`STATIC_ROOT`)에 수집합니다. 수집 결과는 Git에서 제외하며 원본과 미디어는 별도로 유지합니다.
+
+```bash
+uv run --no-sync python src/manage.py collectstatic --noinput --settings=config.settings.prod
+```
+
+운영에서는 Nginx 등 웹 서버가 `/static/` 요청을 이 디렉터리로 연결하도록 설정해야 합니다. Django `urls.py`에 정적 파일 URL을 추가하지 않으며 실제 웹 서버/서비스 관리자·HTTPS 배포는 별도 범위입니다. S3/SES backend 설정과 정적 파일 수집만으로 운영 배포가 완료된 것은 아닙니다. SNS·SQS·웹훅·configuration set은 현재 요구하지 않으며 실제 전달·반송 확인이 필요할 때 후속 연동합니다.
 
 ## 백그라운드 worker와 자동 안내
 

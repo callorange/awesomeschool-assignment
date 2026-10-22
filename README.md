@@ -3,7 +3,7 @@
 교육 소개를 확인한 방문자가 상담을 신청하고, 연락 가능 날짜에 안내를 받는 Django 사전 과제입니다.
 신청은 수강 확정이 아닌 **상담 접수**로 해석했습니다. 연락 가능 날짜도 교육 희망일과 구분합니다.
 
-[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
+[실행 방법](#로컬-실행) · [기능 확인](#실행-후-확인) · [백오피스](#담당자용-백오피스) · [설계 의도](#주요-설계-의도) · [과제 원문](docs/awesomeschool-assignment.md)
 
 ## 구현 범위
 
@@ -11,11 +11,11 @@
 | --- | --- |
 | 교육 소개·관리 | 랜딩·교육 3개의 상세·커리큘럼·대표 이미지·접수 가능 여부. 기본 admin 등록·편집 |
 | 교육 신청 | 반응형 폼·주소 검색/직접 입력·Axios 비동기 제출·접수 상태 표시 |
-| 신청 관리 | 기본 admin 조회·정정·상담 누적·재연락·상태·변경 이력. 신청 삭제 금지 |
+| 신청 관리 | 반응형 백오피스와 기본 admin에서 조회·정정·상담·재연락·상태 관리. 변경 이력은 admin 조회. 신청 삭제 금지 |
 | DRF API | 신청 화면용 교육정보 GET·신청 POST·검증·반복 제출 보호 |
 | 자동 안내 | Q2 날짜별 검사·개발 모의 처리·운영 SES backend·선별 재시도 |
 
-별도 관리자 UI·Google Spreadsheet 내보내기는 미구현입니다. 신청 목록은 Django 기본 admin에서 제공합니다. 과제의 삭제 항목 대신 신청·상담 기록을 보존하고 완료·취소로 처리하는 정책을 선택했습니다. AWS는 SES·S3/CloudFront 설정을 구현했으며 실제 배포와 운영 static 서빙은 포함하지 않았습니다.
+별도 백오피스는 신청·상담 관리와 이메일 처리 상태 조회에 집중하고 교육·계정·권한·이력 상세와 내부 task 기록은 Django admin에서 확인합니다. Google Spreadsheet 내보내기는 미구현입니다. 과제의 삭제 항목 대신 신청·상담 기록을 보존하고 완료·취소로 처리하는 정책을 선택했습니다. AWS는 SES·S3/CloudFront 설정을 구현했으며 실제 배포와 운영 static 서빙은 포함하지 않았습니다.
 
 ## 로컬 실행
 
@@ -113,6 +113,14 @@ uv run python src/manage.py notification_status
 
 종료할 때는 웹 서버·qcluster에서 `Ctrl+C`를 누르고 worker의 처리·결과 저장이 끝날 때까지 기다린 뒤 `docker compose down`으로 DB를 중지합니다. DB volume은 삭제하지 않습니다.
 
+### 담당자용 백오피스
+
+같은 관리자 계정으로 [백오피스](http://127.0.0.1:8000/backoffice/)와 [Django admin](http://127.0.0.1:8000/admin/)을 확인할 수 있습니다. 계정은 위 `createsuperuser` 명령으로 준비합니다. 로그인·로그아웃 상태를 공유하므로 한쪽에서 로그아웃하면 다른 화면에서도 재로그인이 필요합니다.
+
+백오피스는 이름·이메일 검색, 교육·상태·재연락 필터와 페이지네이션, 신청 정정·상태·일정 변경, 상담 조회·추가를 제공합니다. 활성 staff와 모델별 권한을 모두 검사하며 superuser는 바로 확인할 수 있습니다. 신청 변경 권한과 상담 추가 권한이 있으면 기본 해제된 **상담 기록도 추가**를 선택해 함께 저장합니다. 상담 추가만 가능한 담당자는 신청은 읽기 전용으로 보고 **상담 추가**로 저장합니다. 상담 정정에는 상담 조회 권한도 필요합니다.
+
+페이지 이동·검색은 GET, 로그인·로그아웃·신청/상담 저장은 일반 POST입니다. 이메일 조회 권한이 있으면 상세의 **상태 새로고침**이 Ajax로 이메일 영역만 갱신하여 작성 중인 입력을 유지합니다. 자동 polling·재발송·task 관리 화면은 제공하지 않습니다. 일반 저장의 세션 만료·CSRF 실패는 저장 없이 안내하며 작성 내용 자동 복구는 지원하지 않습니다. [백오피스 확인 절차](docs/guides/verification.md#백오피스-확인)를 참고하세요.
+
 ## 주요 설계 의도
 
 ```mermaid
@@ -130,6 +138,7 @@ flowchart LR
 | --- | --- |
 | Templates·Tailwind·Axios | 단일 Django 서버에서 반응형 화면과 비동기 신청을 제공하고 별도 프론트 서버를 줄였습니다. |
 | 교육정보 GET·신청 POST | GET은 선택 교육 안내에 사용하고 신청 개인정보 조회는 공개하지 않았습니다. |
+| 백오피스·기본 admin 병행 | 담당자는 신청·상담 업무에 집중하고 교육·권한·이력·task는 admin에서 확인합니다. 계정·권한·저장 규칙을 공유해 두 화면의 동작을 일치시켰습니다. |
 | 제출 UUID·DB 고유 제약 | 응답 유실 후 같은 입력·ID로 재시도해도 접수와 안내 대상을 중복 생성하지 않습니다. |
 | Q2·PostgreSQL 기본 큐 | 기존 DB를 활용해 별도 Redis 없이 날짜별 안내와 이미지 정리를 요청 처리에서 분리했습니다. |
 | 발송 시도 기록·처리권 | 동시 발송을 제어하고 미접수가 확실한 오류만 재시도합니다. 결과 불명은 `unknown`으로 보존해 자동 재발송을 막습니다. |
@@ -144,12 +153,14 @@ Python 3.14 · Django 6.1.2 · DRF · PostgreSQL 18.6/Psycopg 3 · Tailwind CSS/
 ```text
 src/
     config/             # base/dev/prod 설정·프로젝트 진입점
-    education/          # 모델·DRF API·페이지·관리 명령·테스트
-        forms/          # 교육·신청·상담별 admin 입력 폼
+    education/          # 모델·공개 DRF API·페이지·관리 명령·테스트
+        backoffice.py   # 담당자용 화면·업무 저장·이메일 상태 부분 조회
+        backoffice_urls.py # /backoffice/ 전용 URL
+        forms/          # 교육·신청·상담의 admin·백오피스 입력 폼
         services/       # 신청 변경 검증·신청/이력/안내의 transaction 저장
         tasks/          # Q2 진입점·메일 처리 단계·이미지 정리
         migrations/     # 전체 모델을 생성하는 0001_initial.py
-    templates/          # 공통 layout·교육/신청 화면·메일 본문·admin 위젯
+    templates/          # 공개 화면·백오피스 layout·메일 본문·admin 위젯
     static/             # 빌드 CSS·Axios 포함 JS·source map·라이선스 고지
 presets/education/      # 교육 3개의 초기 데이터·이미지 원본
 frontend/              # 입력 CSS·직접 편집하는 JavaScript
@@ -171,12 +182,12 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-2026-10-22 Windows에서 **124개 테스트**를 통과했습니다. 신청·상담 보존·변경 이력·교육 편집 폼·동시 제출·발송 처리권·기존 task 경로 호환·실제 qcluster 종료/복구를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
+2026-10-22 Windows에서 **141개 테스트**를 통과했습니다. 백오피스 권한·신청/상담 저장·DB 오류 rollback·이메일 부분 조회 17개와 기존 신청·상담 보존·변경 이력·교육 편집 폼·동시 제출·발송 처리권·기존 task 경로 호환·실제 qcluster 종료/복구를 포함합니다. macOS/Linux 전체 실행·모바일 실기기·AWS 실발송은 미검증입니다. [검증 범위와 한계](docs/guides/verification.md#검증-기록과-한계)를 별도로 기록했습니다.
 
 ## AI 도구 활용·추가 문서
 
 Codex로 구현·테스트·문서 정리를 보조했습니다. OpenSpec으로 변경 의도와 작업을 관리하고, Django skill·ponytail을 코딩 기준과 과도한 추상화 방지에 활용했습니다. GitNexus는 코드 인덱스 관리에 사용했습니다. 최종 범위와 검증 결과는 이 저장소의 코드·테스트·문서에 기록했습니다.
 
-- [기능 검증 가이드](docs/guides/verification.md): 기능별 예상 결과·API 계약·장애 재현·콘텐츠 출처
-- [운영 가이드](docs/guides/operations.md): 이메일·이미지 처리 정책·AWS 설정·문제 해결
+- [기능 검증 가이드](docs/guides/verification.md): 공개 화면·백오피스·admin 확인·API 계약·검증 기록
+- [운영 가이드](docs/guides/operations.md): 백오피스 계정·권한·오류 대응·이메일/이미지 정책·AWS 설정
 - [문서 안내](docs/README.md): 과제 검토 자료와 개발·유지보수 거버넌스 구분

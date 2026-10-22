@@ -79,6 +79,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+CSRF_FAILURE_VIEW = "education.backoffice.csrf_failure"
 
 TEMPLATES = [
     {

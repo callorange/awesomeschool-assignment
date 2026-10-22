@@ -1,0 +1,47 @@
+{% load static %}
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}신청 관리{% endblock %} | 어썸스쿨 백오피스</title>
+    <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  </head>
+  <body class="bg-paper font-sans text-ink antialiased">
+    <a href="#main" class="sr-only z-50 bg-white p-4 focus:not-sr-only focus:absolute">본문 바로가기</a>
+    {% if user.is_authenticated and user.is_staff %}
+      <aside class="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-ink/10 bg-ink p-6 text-white lg:flex">
+        <a href="{% url 'backoffice:index' %}" class="text-xl font-black tracking-tight">awesomeschool<span class="text-clay">.</span></a>
+        <p class="mt-2 text-xs text-white/60">교육 상담 · BACKOFFICE</p>
+        <nav aria-label="업무 메뉴" class="mt-12">{% include 'backoffice/navigation.html' %}</nav>
+        <p class="mt-auto pt-8 text-xs leading-6 text-white/60">신청을 확인하고<br>다음 대화를 준비하세요.</p>
+      </aside>
+      <div class="lg:ml-60">
+        <header class="border-b border-ink/10 bg-white px-5 py-4 md:px-8">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <a href="{% url 'backoffice:index' %}" class="text-lg font-black lg:hidden">어썸스쿨</a>
+            <p class="hidden text-sm font-semibold lg:block">교육 상담 관리</p>
+            <div class="flex flex-wrap items-center gap-4 text-sm">
+              <span>{{ user.get_username }}</span>
+              <a href="{% url 'admin:index' %}" class="inline-flex min-h-11 items-center underline underline-offset-4">Django admin ↗</a>
+              <form method="post" action="{% url 'backoffice:logout' %}">{% csrf_token %}<button class="min-h-11 cursor-pointer font-semibold" type="submit">로그아웃</button></form>
+            </div>
+          </div>
+          <details class="mt-2 rounded-xl bg-ink p-3 text-white lg:hidden">
+            <summary class="min-h-11 cursor-pointer py-3 font-semibold">업무 메뉴</summary>
+            <nav aria-label="모바일 업무 메뉴" class="mt-2">{% include 'backoffice/navigation.html' %}</nav>
+          </details>
+        </header>
+      </div>
+    {% endif %}
+    <main id="main" tabindex="-1" class="min-w-0 px-5 py-8 md:px-8 {% if user.is_authenticated and user.is_staff %}lg:ml-60{% endif %}">
+      <div class="mx-auto max-w-6xl">
+        {% for message in messages %}<p role="status" class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">{{ message }}</p>{% endfor %}
+        {% block heading %}{% endblock %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

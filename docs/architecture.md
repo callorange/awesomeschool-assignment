@@ -1,6 +1,6 @@
 # 아키텍처와 기술 선택
 
-교육 소개 → 신청 접수 → 신청 관리라는 하나의 흐름을 단일 Django 프로젝트에서 구현합니다. 교육 소개·상담 신청은 Django Templates와 Tailwind CSS로 제공하고 신청 관리는 기본 Django admin으로 제공합니다. 실행 명령과 구현 상태는 [README](../README.md), 원래 요구사항은 [과제 문서](awesomeschool-assignment.md)를 기준으로 합니다.
+교육 소개 → 신청 접수 → 신청 관리라는 하나의 흐름을 단일 Django 프로젝트에서 구현합니다. 교육 소개·상담 신청과 담당자용 백오피스는 Django Templates와 Tailwind CSS로 제공하고 기본 Django admin도 유지합니다. 실행 명령과 구현 상태는 [README](../README.md), 원래 요구사항은 [과제 문서](awesomeschool-assignment.md)를 기준으로 합니다.
 
 ## 프로젝트 구조
 
@@ -10,8 +10,9 @@
 | `compose.yaml`, `.env.example` | 로컬 PostgreSQL과 환경 변수 계약 |
 | `src/manage.py` | Django 관리 명령 진입점 |
 | `src/config/` | 설정·URL·ASGI·WSGI 진입점 |
-| `src/education/` | 교육·신청·안내 모델, 공개 API·화면, 메일·이미지 작업과 관리 명령 |
-| `src/education/forms/` | 교육·신청·상담별 admin 입력 폼과 교육 콘텐츠 위젯 |
+| `src/education/` | 교육·신청·안내 모델, 공개 API·화면, 백오피스, 메일·이미지 작업과 관리 명령 |
+| `src/education/backoffice.py`, `src/education/backoffice_urls.py` | 담당자 로그인·신청 목록/상세·저장·이메일 상태 HTML 부분 조회 |
+| `src/education/forms/` | 교육·신청·상담별 admin·백오피스 입력 폼과 교육 콘텐츠 위젯 |
 | `src/education/services/applications.py` | 신청 변경 검증과 신청·이력·안내의 transaction 저장 |
 | `src/education/tasks/` | 기존 Q2 함수 경로 공개·안내 등록/발송·메일 처리 단계·이미지 정리 |
 | `src/education/migrations/0001_initial.py` | 전체 모델을 빈 DB에 생성하는 초기 migration |
@@ -19,33 +20,43 @@
 | `src/static/` | 빌드 CSS·JS·source map·라이선스 고지 등 배포 정적 자산을 담는 통합 폴더 |
 | `frontend/`, `package.json`, `package-lock.json` | CSS·JavaScript 소스, 통합 빌드 명령·의존성 설치 조합 |
 | `presets/education/` | 초기화용 JSON 프리셋과 이미지 원본 |
-| `src/education/tests/` | 설정·모델·프리셋·교육/신청 화면·API·메일·이미지·qcluster 테스트 |
+| `src/education/tests/` | 설정·모델·프리셋·공개 화면·백오피스·admin·API·메일·이미지·qcluster 테스트 |
 | `media/` | dev에서 생성되는 실행 중 미디어 파일; Git 제외 |
 | `docs/` | 과제 원문과 프로젝트 설계 설명 |
 | `openspec/` | 프로젝트 맥락과 change별 계획·진행 상태 |
 
-프로젝트 소유 template와 static은 앱별로 만들지 않고 `src/templates/`와 `src/static/`에 통합합니다. 공통 layout은 `src/templates/base.html`, 교육 화면은 `src/templates/education/`, 빌드 CSS는 `src/static/css/site.css`에 둡니다. Django의 TEMPLATES DIRS와 STATICFILES_DIRS에 통합 경로를 등록하며, Django admin 등 설치 앱의 자산 탐색은 유지합니다. Tailwind 탐색은 해당 template 경로로 제한하며 규칙·스킬 파일을 탐색하지 않습니다. 이미지 원본은 `presets/education/images/`에 포함하고 실행 시 선택한 media 저장소에 설정합니다.
+프로젝트 소유 template와 static은 앱별로 만들지 않고 `src/templates/`와 `src/static/`에 통합합니다. 공개 화면의 공통 layout은 `src/templates/base.html`, 백오피스는 `src/templates/backoffice/base.html`을 사용합니다. 교육 화면은 `src/templates/education/`, 빌드 CSS는 `src/static/css/site.css`에 둡니다. Django의 TEMPLATES DIRS와 STATICFILES_DIRS에 통합 경로를 등록하며, Django admin 등 설치 앱의 자산 탐색은 유지합니다. Tailwind 탐색은 해당 template 경로로 제한하며 규칙·스킬 파일을 탐색하지 않습니다. 이미지 원본은 `presets/education/images/`에 포함하고 실행 시 선택한 media 저장소에 설정합니다.
 
 ## JavaScript 진입점과 페이지별 로딩
 
-- `frontend/entries/*.js`는 브라우저가 시작점으로 로드할 파일입니다. 신청 전용 진입점은 `application.js`, 교육 admin의 교시 추가는 `education-admin.js`입니다. 전체 공통·백오피스 공통·다른 페이지의 진입점은 실제 기능이 생길 때 추가합니다.
+- `frontend/entries/*.js`는 브라우저가 시작점으로 로드할 파일입니다. 공개 신청은 `application.js`, 교육 admin의 교시 추가는 `education-admin.js`, 백오피스 상세의 이메일 부분 갱신은 `backoffice-detail.js`입니다. 전체 공통·백오피스 공통·다른 페이지의 진입점은 실제 기능이 생길 때 추가합니다.
 - 여러 진입점에서 재사용하는 모듈은 필요할 때 `frontend/shared/`에 두고 import합니다. 이 폴더의 모듈은 직접 로드할 진입 파일로 빌드하지 않습니다.
-- `npm run build`는 모든 진입점을 함께 빌드합니다. 공개 화면은 필요한 진입 파일을 `type="module"`로 로드합니다. 전체 공통 기능은 `base.html`의 `common_scripts`, 영역 공통 기능은 해당 영역 base template의 `section_scripts`, 페이지 전용 기능은 해당 페이지의 `scripts` 블록에 둡니다. 현재 공통 블록은 비어 있으며 신청 페이지에서 `application.js`를 로드합니다.
+- `npm run build`는 모든 진입점을 함께 빌드합니다. 공개 화면은 필요한 진입 파일을 `type="module"`로 로드합니다. 전체 공통 기능은 `base.html`의 `common_scripts`, 영역 공통 기능은 해당 영역 base template의 `section_scripts`, 페이지 전용 기능은 해당 페이지의 `scripts` 블록에 둡니다. 현재 공통 블록은 비어 있으며 신청 페이지에서 `application.js`를 로드합니다. 백오피스 상세는 이메일 조회 권한이 있을 때만 `backoffice-detail.js`를 로드합니다.
 - Django admin은 공개 화면의 base template를 사용하지 않습니다. 교육 커리큘럼 위젯의 `Media.js`가 `education-admin.js`를 admin 폼에 로드합니다. 이 진입점은 외부 모듈 import 없이 실행되는 단일 번들이며 admin의 기본 CSS·JavaScript는 유지합니다.
 - Axios 등 라이브러리를 사용하는 진입점만 해당 라이브러리를 import합니다. esbuild는 여러 진입점의 공통 의존성을 `src/static/js/chunks/`에 분리하고 생성된 import로 연결하므로 template에서 chunk 경로를 직접 지정하지 않습니다.
 
 ## 기술 선택
 
 - **Python 3.14 / Django 6.1.2**: 기존 호환성 제약이 없는 신규 프로젝트의 기준입니다. Django를 `6.1.2`로 고정하고 lockfile로 정확한 설치 조합을 재현합니다. 장기 운영 시 Django 6.1 지원 종료 전에 업그레이드하며 보안 패치를 계속 확인합니다.
-- **DRF**: 과제에서 지정한 API 프레임워크입니다. 공개 교육정보 GET·신청 POST를 제공합니다. 신청 조회·관리는 기본 admin에서 처리하며 별도 관리자 API는 제공하지 않습니다.
+- **DRF**: 과제에서 지정한 API 프레임워크입니다. 공개 교육정보 GET·신청 POST를 제공합니다. 신청 조회·관리는 백오피스와 기본 admin에서 처리하며 별도 관리자 REST API는 제공하지 않습니다. 백오피스 이메일 부분 조회는 Django HTML 응답입니다.
 - **PostgreSQL 18.6 / Psycopg 3**: 개발·테스트 DB를 통일합니다. SQLite 대체 경로는 두지 않습니다. `postgres:18.6-bookworm`을 사용하고 volume은 `/var/lib/postgresql`에 마운트합니다.
-- **Django Templates / Tailwind CSS / Axios**: 랜딩·교육 상세·신청 화면을 단일 서버에서 제공합니다. Tailwind CSS CLI와 esbuild를 `npm run build`로 실행해 CSS와 Axios를 포함한 JS 번들을 생성합니다. 직접 편집하는 소스는 `frontend/`, 배포 산출물은 `src/static/`에 두고 source map·라이선스 고지와 함께 저장소에 포함하며 별도 프론트 서버·SPA·평가 실행 시 Node.js는 요구하지 않습니다. 주소 검색은 Kakao 공식 SDK를 요청할 때만 로딩하고 직접 입력 대안을 유지합니다.
-- **Django admin**: 교육 등록·수정과 신청 조회·정정·상담·재연락·상태 관리에 사용합니다. 신청·상담은 삭제하지 않으며 안내·전송 시도·공유 예산은 조회 전용입니다. 별도 관리자 UI는 후속 범위입니다.
+- **Django Templates / Tailwind CSS / Axios**: 랜딩·교육 상세·신청·백오피스 화면을 단일 서버에서 제공합니다. Tailwind CSS CLI와 esbuild를 `npm run build`로 실행해 CSS와 Axios를 포함한 JS 번들을 생성합니다. 직접 편집하는 소스는 `frontend/`, 배포 산출물은 `src/static/`에 두고 source map·라이선스 고지와 함께 저장소에 포함하며 별도 프론트 서버·SPA·평가 실행 시 Node.js는 요구하지 않습니다. 주소 검색은 Kakao 공식 SDK를 요청할 때만 로딩하고 직접 입력 대안을 유지합니다.
+- **Django admin·백오피스**: `/admin/`은 교육·계정·권한·신청·상담·이력·내부 기록을 관리하고 `/backoffice/`는 신청·상담 업무와 이메일 상태 조회를 제공합니다. 인증·세션·모델 권한·저장 서비스를 공유합니다. 신청·상담은 삭제하지 않으며 안내·전송 시도·공유 예산은 조회 전용입니다.
 - **django-simple-history 3.13**: 신청 정보·상태·다음 연락 예정의 변경자·시각·전후 값을 보존합니다. 신청에만 적용하며 최초 제출 snapshot은 중복 이력에서 제외합니다. 이력 복원은 제공하지 않습니다.
 - **django-environ**: 관리 명령·WSGI·ASGI가 같은 설정 로딩 경로를 사용하도록 Django 설정에서 `.env`를 읽고 boolean·목록을 해석합니다.
 - **uv / Ruff / Django test runner**: 런타임 의존성과 개발 의존성을 분리하고, 별도 테스트 프레임워크 없이 필요한 계약을 검증합니다.
 
 교육 소개와 신청은 같은 education 앱에서 제공합니다. API는 `api.py`·`serializers.py`, Q2 진입점과 실행 흐름은 `tasks/` 패키지가 담당합니다. 단순 CRUD에 Service·Repository·Selector 계층을 강제하지 않습니다.
+
+## 백오피스 화면과 저장 경계
+
+`education/backoffice_urls.py`와 `education/backoffice.py`가 전용 URL·화면·이메일 조각 조회를 담당하고 `forms/backoffice.py`가 기존 신청·상담 폼의 날짜 위젯·부모 신청 고정·정정 권한을 조정합니다. `templates/backoffice/base.html`과 navigation·fields include가 공통 틀을 제공하며 목록·상세·로그인은 이를 확장합니다. desktop 사이드바·상단바와 모바일 native 접이식 메뉴는 [Flowbite Admin Dashboard](https://github.com/themesberg/flowbite-admin-dashboard)와 [Tailwind application layouts](https://tailwindcss.com/blog/2024-05-24-catalyst-application-layouts)의 배치 원칙을 참고해 기존 Tailwind로 구성했습니다. 외부 템플릿 패키지는 추가하지 않습니다.
+
+목록·검색·필터는 URL query를 유지하는 일반 GET, 업무 저장은 POST 후 상세 GET redirect입니다. 저장 의도는 `save_application`과 `add_consultation`으로 구분하고 권한을 서버에서 검증합니다. 통합 저장의 `include_consultation` 선택만 상담 검증·저장을 활성화합니다. 안내→신청을 잠근 최신 인스턴스로 폼을 검증하고 기존 저장 서비스와 새 상담을 같은 transaction에 묶습니다. 작성자·부모 신청·상담 당시 일정은 서버가 결정합니다.
+
+`applications/<pk>/email-status/`는 동일한 활성 staff·신청/메일 조회 권한을 검사하는 GET 전용 HTML partial입니다. 상세 최초 표시와 같은 template를 사용하고 Ajax는 이메일 내용만 교체합니다. 미인증은 401, 인가 실패는 403이며 로그인 redirect나 개인정보가 든 오류 응답을 삽입하지 않습니다. 일반 업무 POST의 미인증은 미저장 403 안내를 반환합니다. `CSRF_FAILURE_VIEW`는 백오피스만 전용 안내로 처리하고 공개 화면과 admin은 Django 기본 실패 처리에 위임합니다. 개인정보 전체/부분 응답은 캐시하지 않습니다.
+
+일반 유효성 오류는 입력과 상담 선택을 유지합니다. 저장 중 DatabaseError는 transaction 밖에서 처리하여 예외 원문·POST 개인정보를 포함하지 않는 전용 500 안내를 반환합니다. 성공 시 redirect는 새로고침 재제출을 막지만 모든 POST의 중복 방지나 낙관적 동시 편집 감지는 제공하지 않습니다. 로그인·저장 오류 후의 확인 절차는 [운영 가이드](guides/operations.md#백오피스-계정과-요청-처리)를 따릅니다.
 
 ## 백그라운드 task 구성
 
@@ -108,7 +119,7 @@ Education은 교육명·소개·미디어 FileField·목표·대상·시수별 �
 
 신청과 OneToOne 안내는 같은 transaction에 저장합니다. 단일 Q2 기본 큐·qcluster·worker 2개에서 처리하고 대상 등록 스케줄은 명시적 준비 명령으로만 만듭니다. 처리권·MailAttempt·시도 횟수를 먼저 commit한 뒤 긴 외부 호출을 수행하고 결과는 현재 attempt_id와 상태가 일치할 때 함께 저장합니다. 수신자·본문은 Q2 payload에 넣지 않고 ID로 조회합니다. SES 전송 예산은 별도 singleton row의 짧은 lock으로 worker 간 공유합니다. 상세 정책과 명령은 [운영 가이드](guides/operations.md#백그라운드-worker와-자동-안내)를 따릅니다.
 
-실제 전송은 Django 이메일 API와 `MAILERS["default"]["BACKEND"]` 설정을 따르며 개발 locmem·운영 django-ses를 선택합니다. 안내에 저장한 mode는 생성 당시 환경을 기록하고 환경 불일치 발송을 차단하는 값이며 backend를 선택하지 않습니다. 모의 완료와 SES 접수를 구분하고 결과 불명은 재전송하지 않습니다. SNS·SQS·웹훅·실제 전달·반송 추적은 현재 구성에 포함하지 않습니다. 개인정보와 상담 기록은 admin 모델 권한으로 제한하며 공개 신청 조회는 제공하지 않습니다.
+실제 전송은 Django 이메일 API와 `MAILERS["default"]["BACKEND"]` 설정을 따르며 개발 locmem·운영 django-ses를 선택합니다. 안내에 저장한 mode는 생성 당시 환경을 기록하고 환경 불일치 발송을 차단하는 값이며 backend를 선택하지 않습니다. 모의 완료와 SES 접수를 구분하고 결과 불명은 재전송하지 않습니다. SNS·SQS·웹훅·실제 전달·반송 추적은 현재 구성에 포함하지 않습니다. 개인정보와 상담 기록은 백오피스와 admin 모두 Django 모델 권한으로 제한하며 공개 신청 조회는 제공하지 않습니다.
 
 ## 신청 관리와 이력
 
@@ -116,7 +127,7 @@ Education은 교육명·소개·미디어 FileField·목표·대상·시수별 �
 
 `forms/education.py`·`forms/application.py`·`forms/consultation.py`는 입력 표시와 폼 검증을 담당합니다. 신청 변경의 공통 검증·저장은 `services/applications.py`에 두며 별도 service 클래스나 재노출 wrapper는 만들지 않습니다. worker와 관리 저장이 공유하는 종료 상태는 `EducationApplication.TERMINAL_STATUSES`를 사용합니다.
 
-관리 변경은 `services.applications.save_application`을 사용합니다. 안내→신청 row lock 순서로 worker claim과 직렬화하며 신청·이력·안내 조정을 함께 저장합니다. admin은 폼 조회 전 같은 lock을 얻고 상담 inline도 요청 transaction에 포함합니다. 다음 연락 예정은 follow_up에서만 사용하며 메일 대상 시각과 구분합니다.
+관리 변경은 `services.applications.save_application`을 사용합니다. 안내→신청 row lock 순서로 worker claim과 직렬화하며 신청·이력·안내 조정을 함께 저장합니다. admin은 폼 조회 전 같은 lock을 얻고 상담 inline도 요청 transaction에 포함합니다. 백오피스도 같은 lock 순서와 저장 서비스를 사용하고 선택한 상담을 함께 저장합니다. 다음 연락 예정은 follow_up에서만 사용하며 메일 대상 시각과 구분합니다.
 
 ConsultationRecord는 작성자·시각·결과·내용·당시 일정과 정정 대상 원기록을 누적합니다. 기존 기록은 수정·삭제하지 않고 같은 신청의 원기록을 가리키는 정정으로 보완합니다. 신청·상담의 instance/QuerySet 삭제와 상담 update를 차단하며 상담 작성자가 있는 계정은 삭제 대신 비활성화합니다.
 
